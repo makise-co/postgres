@@ -20,7 +20,7 @@ use MakiseCo\Postgres\Statement;
 use Swoole\Coroutine;
 use Swoole\Coroutine\WaitGroup;
 
-class UnbufferedResultSetTest extends CoroTestCase
+class ConnectionTest extends CoroTestCase
 {
     use PostgresTrait {
         getConnection as parentGetConnection;
