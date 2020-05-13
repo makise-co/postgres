@@ -17,10 +17,6 @@ class Connector
         $connection = new Connection($config);
         $connection->connect();
 
-        // TODO: Set encoding
-        // TODO: Set timezone
-        // TODO: Set search path
-
         return $connection;
     }
 }

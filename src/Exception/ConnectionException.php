@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Exception;
 
-class ConnectionException extends \Error
+use Error;
+
+class ConnectionException extends Error
 {
 }

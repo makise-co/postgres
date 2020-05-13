@@ -10,7 +10,13 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Internal;
 
+use Error;
+
+use function array_key_exists;
+use function is_int;
 use function MakiseCo\Postgres\cast;
+use function preg_replace_callback;
+use function sprintf;
 
 const STATEMENT_PARAM_REGEX = <<<'REGEX'
 ~(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*FAIL)|(\$(\d+)|\?)|(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)~ms
@@ -25,24 +31,28 @@ REGEX;
 function parseNamedParams(string $sql, ?array &$names): string
 {
     $names = [];
-    return \preg_replace_callback(STATEMENT_PARAM_REGEX, function (array $matches) use (&$names): string {
-        static $index = 0, $unnamed = 0, $numbered = 1;
+    return preg_replace_callback(
+        STATEMENT_PARAM_REGEX,
+        function (array $matches) use (&$names): string {
+            static $index = 0, $unnamed = 0, $numbered = 1;
 
-        if (isset($matches[4])) {
-            $names[$index] = $matches[4];
-        } elseif ($matches[2] === '?') {
-            $names[$index] = $unnamed++;
-        } else {
-            $position = (int)$matches[3];
-            if ($numbered++ !== $position) {
-                throw new \Error("Numbered placeholders must be sequential starting at 1");
+            if (isset($matches[4])) {
+                $names[$index] = $matches[4];
+            } elseif ($matches[2] === '?') {
+                $names[$index] = $unnamed++;
+            } else {
+                $position = (int)$matches[3];
+                if ($numbered++ !== $position) {
+                    throw new Error("Numbered placeholders must be sequential starting at 1");
+                }
+
+                $names[$index] = $unnamed++;
             }
 
-            $names[$index] = $unnamed++;
-        }
-
-        return '$' . ++$index;
-    }, $sql);
+            return '$' . ++$index;
+        },
+        $sql
+    );
 }
 
 /**
@@ -51,20 +61,20 @@ function parseNamedParams(string $sql, ?array &$names): string
  *
  * @return mixed[]
  *
- * @throws \Error If the $param array does not contain a key corresponding to a named parameter.
+ * @throws Error If the $param array does not contain a key corresponding to a named parameter.
  */
 function replaceNamedParams(array $params, array $names): array
 {
     $values = [];
     foreach ($names as $index => $name) {
-        if (!\array_key_exists($name, $params)) {
-            if (\is_int($name)) {
-                $message = \sprintf("Value for unnamed parameter at position %s missing", $name);
+        if (!array_key_exists($name, $params)) {
+            if (is_int($name)) {
+                $message = sprintf("Value for unnamed parameter at position %s missing", $name);
             } else {
-                $message = \sprintf("Value for named parameter '%s' missing", $name);
+                $message = sprintf("Value for named parameter '%s' missing", $name);
             }
 
-            throw new \Error($message);
+            throw new Error($message);
         }
 
         $values[$index] = cast($params[$name]);

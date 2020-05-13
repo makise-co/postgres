@@ -10,7 +10,10 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres;
 
-use pq;
+use Closure;
+use pq\Result;
+use stdClass;
+use Throwable;
 
 final class UnbufferedResultSet extends ResultSet
 {
@@ -20,15 +23,15 @@ final class UnbufferedResultSet extends ResultSet
 
     private bool $firstRowFetched = false;
 
-    private \Closure $fetchFunction;
+    private Closure $fetchFunction;
 
-    private pq\Result $result;
+    private Result $result;
 
     /**
-     * @param callable():  $fetch Function to fetch next result row.
-     * @param \pq\Result $result PostgreSQL result object.
+     * @param Closure $fetch Function to fetch next result row.
+     * @param Result $result PostgreSQL result object.
      */
-    public function __construct(callable $fetch, pq\Result $result)
+    public function __construct(Closure $fetch, Result $result)
     {
         $this->fetchFunction = $fetch;
         $this->numCols = $result->numCols;
@@ -46,7 +49,7 @@ final class UnbufferedResultSet extends ResultSet
         try {
             while (null !== ($this->fetchFunction)()) {
             }
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
         }
     }
 
@@ -71,15 +74,15 @@ final class UnbufferedResultSet extends ResultSet
      */
     public function fetchAssoc(): ?array
     {
-        return $this->fetch(pq\Result::FETCH_ASSOC);
+        return $this->fetch(Result::FETCH_ASSOC);
     }
 
     /**
      * {@inheritDoc}
      */
-    public function fetchObject(): ?\stdClass
+    public function fetchObject(): ?stdClass
     {
-        return $this->fetch(pq\Result::FETCH_OBJECT);
+        return $this->fetch(Result::FETCH_OBJECT);
     }
 
     /**
@@ -87,7 +90,7 @@ final class UnbufferedResultSet extends ResultSet
      */
     public function fetchArray(): ?array
     {
-        return $this->fetch(pq\Result::FETCH_ARRAY);
+        return $this->fetch(Result::FETCH_ARRAY);
     }
 
     /**
@@ -160,7 +163,7 @@ final class UnbufferedResultSet extends ResultSet
         return $this->numCols;
     }
 
-    private function retrieveNextResult(): ?pq\Result
+    private function retrieveNextResult(): ?Result
     {
         if ($this->allRowsAreFetched) {
             return null;

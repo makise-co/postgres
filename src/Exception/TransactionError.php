@@ -12,7 +12,7 @@ namespace MakiseCo\Postgres\Exception;
 
 use Error;
 
-class ParseException extends Error
+class TransactionError extends Error
 {
 
 }

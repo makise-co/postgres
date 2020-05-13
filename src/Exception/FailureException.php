@@ -10,7 +10,9 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Exception;
 
-class FailureException extends \Exception
+use Exception;
+
+class FailureException extends Exception
 {
 
 }

@@ -10,10 +10,13 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres;
 
+use pq\Result;
+use stdClass;
+
 abstract class ResultSet
 {
-    public const DEFAULT_FETCH_STYLE = \pq\Result::FETCH_ASSOC;
-    public const DEFAULT_AUTO_CONVERT = \pq\Result::CONV_SCALAR | \pq\Result::CONV_ARRAY;
+    public const DEFAULT_FETCH_STYLE = Result::FETCH_ASSOC;
+    public const DEFAULT_AUTO_CONVERT = Result::CONV_SCALAR | Result::CONV_ARRAY;
 
     protected int $autoConvert = self::DEFAULT_AUTO_CONVERT;
 
@@ -31,10 +34,10 @@ abstract class ResultSet
      * Iteratively fetch a row
      *
      * @param int $fetchStyle fetch style, one of pq\Result::FETCH_* constants
-     * @return array|\stdClass|null array numerically indexed for pq\Result::FETCH_ARRAY
-     * 		 or array associatively indexed for pq\Result::FETCH_ASSOC
-     * 		 or object stdClass instance for pq\Result::FETCH_OBJECT
-     * 		 or NULL when iteration ends.
+     * @return array|stdClass|null array numerically indexed for pq\Result::FETCH_ARRAY
+     *         or array associatively indexed for pq\Result::FETCH_ASSOC
+     *         or object stdClass instance for pq\Result::FETCH_OBJECT
+     *         or NULL when iteration ends.
      */
     abstract public function fetch(int $fetchStyle = self::DEFAULT_FETCH_STYLE);
 
@@ -48,9 +51,9 @@ abstract class ResultSet
     /**
      * Iteratively fetch a row as stdClass instance, where the column names are the property names.
      *
-     * @return \stdClass|null instance of stdClass or NULL when iteration ends.
+     * @return stdClass|null instance of stdClass or NULL when iteration ends.
      */
-    abstract public function fetchObject(): ?\stdClass;
+    abstract public function fetchObject(): ?stdClass;
 
     /**
      * Iteratively fetch a row as numerically indexed array, where the index start with 0

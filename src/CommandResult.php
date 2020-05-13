@@ -10,17 +10,17 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres;
 
-use pq;
+use pq\Result;
 
 final class CommandResult
 {
-    /** @var \pq\Result PostgreSQL result object. */
-    private pq\Result $result;
+    /** @var Result PostgreSQL result object. */
+    private Result $result;
 
     /**
-     * @param \pq\Result $result PostgreSQL result object.
+     * @param Result $result PostgreSQL result object.
      */
-    public function __construct(pq\Result $result)
+    public function __construct(Result $result)
     {
         $this->result = $result;
     }

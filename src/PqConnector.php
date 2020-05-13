@@ -10,11 +10,14 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres;
 
+use Closure;
 use pq;
 use pq\Connection as PqConnection;
 use Swoole\Coroutine;
 use Swoole\Event;
 use Swoole\Timer;
+
+use function sprintf;
 
 class PqConnector
 {
@@ -27,11 +30,21 @@ class PqConnector
         $this->config = $config;
     }
 
+    /**
+     * @return PqConnection
+     * @throws Exception\FailureException
+     * @throws Exception\ConnectionException when can't connect to Postgres server
+     */
     public function connect(): pq\Connection
     {
         $timeout = $this->config->getConnectTimeout();
 
-        $pq = $this->pq = new PqConnection($this->config->__toString(), PqConnection::ASYNC);
+        try {
+            $pq = $this->pq = new PqConnection($this->config->__toString(), PqConnection::ASYNC);
+        } catch (pq\Exception\RuntimeException $e) {
+            throw new Exception\ConnectionException($e->getMessage());
+        }
+
         $this->pq->unbuffered = $this->config->getUnbuffered();
         $this->pq->nonblocking = true;
 
@@ -40,19 +53,23 @@ class PqConnector
 
         if (!Event::add(
             $this->pq->socket,
-            \Closure::fromCallable([$this, 'connectCallback']),
-            \Closure::fromCallable([$this, 'connectCallback']),
+            Closure::fromCallable([$this, 'connectCallback']),
+            Closure::fromCallable([$this, 'connectCallback']),
             SWOOLE_EVENT_READ | SWOOLE_EVENT_WRITE
         )) {
             throw new Exception\FailureException('Cannot add postgres events');
         }
 
         if ($timeout > 0) {
-            $connectContext->timerId = Timer::after((int)($timeout * 1000), static function (ConnectContext $ctx) {
-                $ctx->state = ConnectContext::STATE_CONNECTION_TIMEOUT;
+            $connectContext->timerId = Timer::after(
+                (int)($timeout * 1000),
+                static function (ConnectContext $ctx) {
+                    $ctx->state = ConnectContext::STATE_CONNECTION_TIMEOUT;
 
-                Coroutine::resume($ctx->cid);
-            }, $connectContext);
+                    Coroutine::resume($ctx->cid);
+                },
+                $connectContext
+            );
         }
 
         Coroutine::yield();
@@ -65,7 +82,7 @@ class PqConnector
 
         switch ($connectContext->state) {
             case ConnectContext::STATE_CONNECTION_TIMEOUT:
-                throw new Exception\ConnectionTimeoutException($timeout);
+                throw new Exception\ConnectionException(sprintf("Connection timeout. Timeout: %f secs", $timeout));
             case ConnectContext::STATE_CONNECTION_ERROR:
                 throw new Exception\ConnectionException($pq->errorMessage);
             case ConnectContext::STATE_CONNECTED:

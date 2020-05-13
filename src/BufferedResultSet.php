@@ -10,78 +10,107 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres;
 
-use pq;
+use pq\Result;
+use stdClass;
 
 final class BufferedResultSet extends ResultSet
 {
-    /** @var \pq\Result */
-    private pq\Result $result;
+    /** @var Result */
+    private Result $result;
 
-    /** @var int */
-    private int $position = 0;
-
-    /** @var mixed Last row emitted. */
-    private $currentRow;
+    private int $numCols;
 
     /**
-     * @param pq\Result $result PostgreSQL result object.
+     * @param Result $result PostgreSQL result object.
      */
-    public function __construct(pq\Result $result)
+    public function __construct(Result $result)
     {
         $this->result = $result;
-        $this->result->autoConvert = pq\Result::CONV_SCALAR | pq\Result::CONV_ARRAY;
+        $this->numCols = $result->numCols;
     }
 
     /**
-     * {@inheritdoc}
+     * {@inheritDoc}
      */
-    public function getCurrent(): array
+    public function fetch(int $fetchStyle = self::DEFAULT_FETCH_STYLE)
     {
-        if ($this->currentRow !== null) {
-            return $this->currentRow;
-        }
+        $this->result->autoConvert = $this->autoConvert;
 
-        if ($this->position > $this->result->numRows) {
-            throw new \Error("No more rows remain in the result set");
-        }
-
-        return $this->currentRow = $this->result->fetchRow(pq\Result::FETCH_ASSOC);
+        return $this->result->fetchRow($fetchStyle);
     }
 
-    public function getNumRows(): int
+    /**
+     * {@inheritDoc}
+     */
+    public function fetchAssoc(): ?array
     {
-        return $this->result->numRows;
+        return $this->fetch(Result::FETCH_ASSOC);
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    public function fetchObject(): ?stdClass
+    {
+        return $this->fetch(Result::FETCH_OBJECT);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function fetchArray(): ?array
+    {
+        return $this->fetch(Result::FETCH_ARRAY);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function fetchCol($col, &$ref): ?bool
+    {
+        $this->result->autoConvert = $this->autoConvert;
+
+        return $this->result->fetchCol($ref, $col);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function fetchAll(int $fetchStyle = self::DEFAULT_FETCH_STYLE): array
+    {
+        $this->result->autoConvert = $this->autoConvert;
+
+        return $this->result->fetchAll($fetchStyle);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function fetchAllCols($col): array
+    {
+        $this->result->autoConvert = $this->autoConvert;
+
+        return $this->result->fetchAllCols($col);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function fetchBound(array $map = []): ?array
+    {
+        /** @noinspection PhpParameterByRefIsNotUsedAsReferenceInspection */
+        foreach ($map as $col => &$property) {
+            $this->result->bind($col, $property);
+        }
+
+        return $this->result->fetchBound();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     public function getFieldCount(): int
     {
-        return $this->result->numCols;
-    }
-
-    public function current()
-    {
-        return $this->getCurrent();
-    }
-
-    public function next(): void
-    {
-        $this->position++;
-        $this->currentRow = null;
-    }
-
-    public function key(): int
-    {
-        return $this->position;
-    }
-
-    public function valid(): bool
-    {
-        return $this->position < $this->result->numRows;
-    }
-
-    public function rewind(): void
-    {
-        $this->position = 0;
-        $this->currentRow = null;
+        return $this->numCols;
     }
 }

@@ -12,18 +12,22 @@ namespace MakiseCo\Postgres\Tests;
 
 use MakiseCo\Postgres\ConnectConfig;
 use MakiseCo\Postgres\Connection;
+
 use function getenv;
 
 trait PostgresTrait
 {
-    protected function getConnectConfig(float $connectTimeout = 2, bool $unbuffered = true): ConnectConfig
-    {
+    protected function getConnectConfig(
+        float $connectTimeout = 2,
+        bool $unbuffered = true,
+        ?string $user = null
+    ): ConnectConfig {
         $host = getenv('POSTGRES_HOST');
         if (!$host) {
             $host = 'postgres';
         }
 
-        $user = getenv('POSTGRES_USER');
+        $user = $user ?? getenv('POSTGRES_USER');
         if (!$user) {
             $user = 'postgres';
         }

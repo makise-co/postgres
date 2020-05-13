@@ -10,7 +10,9 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Exception;
 
-class QueryError extends \Error
+use Error;
+
+class QueryError extends Error
 {
 
 }

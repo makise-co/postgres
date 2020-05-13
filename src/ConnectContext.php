@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres;
 
-class ConnectContext
+final class ConnectContext
 {
     public int $cid = 0;
     public int $timerId = 0;

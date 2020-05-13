@@ -10,14 +10,12 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Exception;
 
-use Throwable;
-
-class QueryExecutionError extends \Error
+class QueryExecutionError extends QueryError
 {
     private string $query;
-    private $diagnostics;
+    private array $diagnostics;
 
-    public function __construct(string $message, string $query, $diagnostics)
+    public function __construct(string $message, string $query, array $diagnostics)
     {
         parent::__construct($message, 0, null);
 
@@ -30,7 +28,7 @@ class QueryExecutionError extends \Error
         return $this->query;
     }
 
-    public function getDiagnostics()
+    public function getDiagnostics(): array
     {
         return $this->diagnostics;
     }

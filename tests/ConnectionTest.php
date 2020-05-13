@@ -10,15 +10,30 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Tests;
 
+use Error;
+use MakiseCo\Postgres\BufferedResultSet;
 use MakiseCo\Postgres\CommandResult;
 use MakiseCo\Postgres\ConnectConfig;
 use MakiseCo\Postgres\Connection;
+use MakiseCo\Postgres\Exception\ConcurrencyException;
+use MakiseCo\Postgres\Exception\ConnectionException;
+use MakiseCo\Postgres\Exception\FailureException;
 use MakiseCo\Postgres\Exception\QueryError;
 use MakiseCo\Postgres\Exception\QueryExecutionError;
+use MakiseCo\Postgres\Exception\TransactionError;
+use MakiseCo\Postgres\Listener;
+use MakiseCo\Postgres\Notification;
 use MakiseCo\Postgres\ResultSet;
 use MakiseCo\Postgres\Statement;
+use MakiseCo\Postgres\Transaction;
+use MakiseCo\Postgres\UnbufferedResultSet;
 use Swoole\Coroutine;
 use Swoole\Coroutine\WaitGroup;
+use Swoole\Event;
+use Swoole\Timer;
+use Throwable;
+
+use function sprintf;
 
 class ConnectionTest extends CoroTestCase
 {
@@ -44,6 +59,55 @@ class ConnectionTest extends CoroTestCase
         return $connection;
     }
 
+    public function testDisconnect(): void
+    {
+        $this->expectException(ConnectionException::class);
+        $this->expectExceptionMessage('Connection is closed');
+
+        $connection = $this->getConnection();
+        $connection->disconnect();
+
+        $this->assertFalse($connection->isConnected());
+
+        $connection->query('SELECT 1');
+    }
+
+    /**
+     * @depends testDisconnect
+     */
+    public function testDisconnectWithStatement(): void
+    {
+        $this->expectException(FailureException::class);
+        $this->expectExceptionMessage('Statement is closed');
+
+        $connection = $this->getConnection();
+
+        $stmt = $connection->prepare('SELECT ? AS n');
+
+        $connection->disconnect();
+
+        $this->assertFalse($connection->isConnected());
+
+        $this->assertFalse($stmt->isAlive());
+        $this->assertTrue($stmt->isClosed());
+
+        $stmt->execute([0]);
+    }
+
+    public function testConnect(): void
+    {
+        $connection = $this->getConnection();
+        $connection->disconnect();
+
+        $this->assertFalse($connection->isConnected());
+
+        $connection->connect();
+
+        $this->assertTrue($connection->isConnected());
+
+        $connection->query('SELECT 1');
+    }
+
     public function testUnbufferedResultSet(): void
     {
         $connection = $this->getConnection();
@@ -51,6 +115,9 @@ class ConnectionTest extends CoroTestCase
         $this->assertTrue($connection->getHandle()->getPq()->unbuffered);
 
         $result = $connection->query('SELECT * FROM test');
+
+        /* @var UnbufferedResultSet $result */
+        $this->assertInstanceOf(UnbufferedResultSet::class, $result);
 
         $data = $this->getData();
 
@@ -64,6 +131,30 @@ class ConnectionTest extends CoroTestCase
         $this->assertSame(count($data), $i);
     }
 
+    public function testBufferedResultSet(): void
+    {
+        $connection = $this->getConnection(
+            $this->getConnectConfig(2, false)
+        );
+
+        $this->assertFalse($connection->getHandle()->getPq()->unbuffered);
+
+        $result = $connection->query('SELECT * FROM test');
+
+        /* @var BufferedResultSet $result */
+        $this->assertInstanceOf(BufferedResultSet::class, $result);
+
+        $data = $this->getData();
+
+        $i = 0;
+        while ($row = $result->fetchAssoc()) {
+            $this->assertSame($data[$i][0], $row['domain']);
+            $this->assertSame($data[$i][1], $row['tld']);
+            $i++;
+        }
+
+        $this->assertSame(count($data), $i);
+    }
 
     public function testQueryWithTupleResult(): void
     {
@@ -136,11 +227,26 @@ class ConnectionTest extends CoroTestCase
 
         try {
             $connection->query("SELECT & FROM test");
-            $this->fail(\sprintf("An instance of %s was expected to be thrown", QueryExecutionError::class));
+            $this->fail(sprintf("An instance of %s was expected to be thrown", QueryExecutionError::class));
         } catch (QueryExecutionError $exception) {
             $diagnostics = $exception->getDiagnostics();
             $this->assertArrayHasKey("sqlstate", $diagnostics);
         }
+    }
+
+    public function testQueryWithTimeoutError(): void
+    {
+        $connection = $this->getConnection();
+
+        try {
+            $connection->query("SELECT pg_sleep(1)", 0.05);
+            $this->fail(sprintf("An instance of %s was expected to be thrown", QueryExecutionError::class));
+        } catch (QueryExecutionError $exception) {
+            $diagnostics = $exception->getDiagnostics();
+            $this->assertArrayHasKey("sqlstate", $diagnostics);
+        }
+
+        $connection->query('SELECT 1');
     }
 
     public function testPrepare(): void
@@ -278,9 +384,6 @@ class ConnectionTest extends CoroTestCase
         $statement1 = $connection->prepare($sql);
         $statement2 = $connection->prepare($sql);
 
-        $this->assertInstanceOf(Statement::class, $statement1);
-        $this->assertInstanceOf(Statement::class, $statement2);
-
         unset($statement1);
 
         $data = $this->getData()[0];
@@ -297,76 +400,44 @@ class ConnectionTest extends CoroTestCase
         }
     }
 
-//    /**
-//     * @depends testPrepareSameQuery
-//     */
-//    public function testSimultaneousPrepareSameQuery(): void
-//    {
-//        // TODO: Fix this test because it fails with statement already exist error
-//        $connection = $this->getConnection();
-//
-//        $sql = "SELECT * FROM test WHERE domain=\$1";
-//
-//        $wg = new WaitGroup();
-//        $wg->add(2);
-//
-//        $statement1 = null;
-//        $statement2 = null;
-//        Coroutine::create(function () use (&$statement1, $wg, $connection, $sql) {
-//            $statement1 = $connection->prepare($sql);
-//            $wg->done();
-//        });
-//        Coroutine::create(function () use (&$statement2, $wg, $connection, $sql) {
-//            $statement2 = $connection->prepare($sql);
-//            $wg->done();
-//        });
-//        $wg->wait();
-//
-//        $data = $this->getData()[0];
-//
-//        $result = $statement1->execute([$data[0]]);
-//
-//        $this->assertInstanceOf(ResultSet::class, $result);
-//
-//        $this->assertSame(2, $result->getFieldCount());
-//
-//        while ($row = $result->fetchAssoc()) {
-//            $this->assertSame($data[0], $row['domain']);
-//            $this->assertSame($data[1], $row['tld']);
-//        }
-//
-//        unset($statement1);
-//
-//        $result = $statement2->execute([$data[0]]);
-//
-//        $this->assertInstanceOf(ResultSet::class, $result);
-//
-//        $this->assertSame(2, $result->getFieldCount());
-//
-//        while ($row = $result->fetchAssoc()) {
-//            $this->assertSame($data[0], $row['domain']);
-//            $this->assertSame($data[1], $row['tld']);
-//        }
-//    }
-
     public function testPrepareSimilarQueryReturnsDifferentStatements(): void
     {
         $connection = $this->getConnection();
 
+        $this->expectException(ConcurrencyException::class);
+
         $wg = new WaitGroup();
         $wg->add(2);
 
+        $ex = null;
         $statement1 = null;
         $statement2 = null;
-        Coroutine::create(function () use (&$statement1, $wg, $connection) {
-            $statement1 = $connection->prepare("SELECT * FROM test WHERE domain=\$1");
-            $wg->done();
-        });
-        Coroutine::create(function () use (&$statement2, $wg, $connection) {
-            $statement2 = $connection->prepare("SELECT * FROM test WHERE domain=:domain");
-            $wg->done();
-        });
+        Coroutine::create(
+            function () use (&$statement1, $wg, $connection, &$ex) {
+                try {
+                    $statement1 = $connection->prepare("SELECT * FROM test WHERE domain=\$1");
+                } catch (Throwable $e) {
+                    $ex = $e;
+                }
+                $wg->done();
+            }
+        );
+        Coroutine::create(
+            function () use (&$statement2, $wg, $connection, &$ex) {
+                try {
+                    $statement2 = $connection->prepare("SELECT * FROM test WHERE domain=:domain");
+                } catch (Throwable $e) {
+                    $ex = $e;
+                }
+
+                $wg->done();
+            }
+        );
         $wg->wait();
+
+        if ($ex) {
+            throw $ex;
+        }
 
         /* @var Statement $statement1 */
         $this->assertInstanceOf(Statement::class, $statement1);
@@ -431,94 +502,102 @@ class ConnectionTest extends CoroTestCase
         }
     }
 
-//    public function testExecute(): void
-//    {
-//        // TODO: Write execute method
-//        $data = $this->getData()[0];
-//
-//        /** @var \Amp\Postgres\ResultSet $result */
-//        $result = yield $this->connection->execute("SELECT * FROM test WHERE domain=\$1", [$data[0]]);
-//
-//        $this->assertInstanceOf(ResultSet::class, $result);
-//
-//        $this->assertSame(2, $result->getFieldCount());
-//
-//        while (yield $result->advance()) {
-//            $row = $result->getCurrent();
-//            $this->assertSame($data[0], $row['domain']);
-//            $this->assertSame($data[1], $row['tld']);
-//        }
-//    }
+    public function testExecute(): void
+    {
+        $data = $this->getData()[0];
 
-//    /**
-//     * @depends testExecute
-//     */
-//    public function testExecuteWithNamedParams(): \Generator
-//    {
-//        // TODO: Write execute method
-//        $data = $this->getData()[0];
-//
-//        /** @var \Amp\Postgres\ResultSet $result */
-//        $result = yield $this->connection->execute(
-//            "SELECT * FROM test WHERE domain=:domain",
-//            ['domain' => $data[0]]
-//        );
-//
-//        $this->assertInstanceOf(ResultSet::class, $result);
-//
-//        $this->assertSame(2, $result->getFieldCount());
-//
-//        while (yield $result->advance()) {
-//            $row = $result->getCurrent();
-//            $this->assertSame($data[0], $row['domain']);
-//            $this->assertSame($data[1], $row['tld']);
-//        }
-//    }
+        $connection = $this->getConnection();
 
-//    /**
-//     * @depends testExecute
-//     */
-//    public function testExecuteWithInvalidParams(): Promise
-//    {
-//        // TODO: Write execute method
-//        $this->expectException(\Error::class);
-//        $this->expectExceptionMessage("Value for unnamed parameter at position 0 missing");
-//
-//        return $this->connection->execute("SELECT * FROM test WHERE domain=\$1");
-//    }
+        /** @var ResultSet $result */
+        $result = $connection->execute("SELECT * FROM test WHERE domain=\$1", [$data[0]]);
 
-//    /**
-//     * @depends testExecute
-//     */
-//    public function testExecuteWithInvalidNamedParams(): Promise
-//    {
-//        // TODO: Write execute method
-//
-//        $this->expectException(\Error::class);
-//        $this->expectExceptionMessage("Value for named parameter 'domain' missing");
-//
-//        return $this->connection->execute("SELECT * FROM test WHERE domain=:domain", ['tld' => 'com']);
-//    }
+        $this->assertInstanceOf(ResultSet::class, $result);
+
+        $this->assertSame(2, $result->getFieldCount());
+
+        while ($row = $result->fetchAssoc()) {
+            $this->assertSame($data[0], $row['domain']);
+            $this->assertSame($data[1], $row['tld']);
+        }
+    }
+
+    /**
+     * @depends testExecute
+     */
+    public function testExecuteWithNamedParams(): void
+    {
+        $data = $this->getData()[0];
+
+        $connection = $this->getConnection();
+
+        /** @var ResultSet $result */
+        $result = $connection->execute(
+            "SELECT * FROM test WHERE domain=:domain",
+            ['domain' => $data[0]]
+        );
+
+        $this->assertInstanceOf(ResultSet::class, $result);
+
+        $this->assertSame(2, $result->getFieldCount());
+
+        while ($row = $result->fetchAssoc()) {
+            $this->assertSame($data[0], $row['domain']);
+            $this->assertSame($data[1], $row['tld']);
+        }
+    }
+
+    /**
+     * @depends testExecute
+     */
+    public function testExecuteWithInvalidParams(): void
+    {
+        $this->expectException(Error::class);
+        $this->expectExceptionMessage("Value for unnamed parameter at position 0 missing");
+
+        $connection = $this->getConnection();
+        $connection->execute("SELECT * FROM test WHERE domain=\$1");
+    }
+
+    /**
+     * @depends testExecute
+     */
+    public function testExecuteWithInvalidNamedParams(): void
+    {
+        $this->expectException(Error::class);
+        $this->expectExceptionMessage("Value for named parameter 'domain' missing");
+
+        $connection = $this->getConnection();
+
+        $connection->execute("SELECT * FROM test WHERE domain=:domain", ['tld' => 'com']);
+    }
 
     /**
      * @depends testQueryWithTupleResult
      */
-    public function testSimultaneousQuery(): void
+    public function testSimultaneousQueryWithDelay(): void
     {
+        $this->expectException(ConcurrencyException::class);
+
         $connection = $this->getConnection();
+
+        $ex = null;
 
         $wg = new WaitGroup();
         $wg->add(2);
 
-        $callback = function ($value) use ($connection, $wg) {
-            $result = $connection->query("SELECT {$value} as value");
+        $callback = function ($value) use ($connection, $wg, &$ex) {
+            try {
+                $result = $connection->query("SELECT {$value} as value");
 
-            if ($value) {
-                Coroutine::sleep(0.1);
+                if ($value) {
+                    Coroutine::sleep(0.1);
+                }
+
+                $row = $result->fetchAssoc();
+                $this->assertEquals($value, $row['value']);
+            } catch (Throwable $e) {
+                $ex = $e;
             }
-
-            $row = $result->fetchAssoc();
-            $this->assertEquals($value, $row['value']);
 
             $wg->done();
         };
@@ -527,191 +606,253 @@ class ConnectionTest extends CoroTestCase
         Coroutine::create($callback, 1);
 
         $wg->wait();
+
+        if ($ex) {
+            throw $ex;
+        }
     }
 
-//    /**
-//     * @depends testSimultaneousQuery
-//     */
-//    public function testSimultaneousQueryWithOneFailing(): void
-//    {
-//        // TODO: Fix this test, because for now the parallel queries does not supported
-//        $connection = $this->getConnection();
-//
-//        $successfulCh = new Channel(1);
-//        $failingCh = new Channel(1);
-//
-//        // do not let coroutine to die
-//        Coroutine::set([
-//            'exit_condition' => function () use ($successfulCh, $failingCh) {
-//                return $successfulCh->stats()['consumer_num'] === 0 && $failingCh->stats()['consumer_num'] === 0;
-//            }
-//        ]);
-//
-//        $callback = function (string $query, Channel $ch) use ($connection) {
-//            try {
-//                $result = $connection->query($query);
-//
-//                $data = $this->getData();
-//
-//                $i = 0;
-//                while ($row = $result->fetchAssoc()) {
-//                    $this->assertSame($data[$i][0], $row['domain']);
-//                    $this->assertSame($data[$i][1], $row['tld']);
-//                    $i++;
-//                }
-//
-//                $ch->push($result);
-//            } catch (\Throwable $e) {
-//                $ch->push($e);
-//            }
-//        };
-//
-//        Coroutine::create($callback, "SELECT * FROM test", $successfulCh);
-//        Coroutine::create($callback, "SELECT & FROM test", $failingCh);
-//
-//        $successful = $successfulCh->pop();
-//        $failing = $failingCh->pop();
-//
-//        $this->assertInstanceOf(ResultSet::class, $successful);
-//        $this->assertInstanceOf(QueryError::class, $failing);
-//    }
-
-    public function testSimultaneousQueryAndPrepare(): Promise
+    public function testTransaction(): void
     {
-        $promises = [];
-        $promises[] = new Coroutine((function () {
-            /** @var \Amp\Postgres\ResultSet $result */
-            $result = yield $this->connection->query("SELECT * FROM test");
+        $connection = $this->getConnection();
 
-            $data = $this->getData();
+        $isolation = Transaction::ISOLATION_COMMITTED;
 
-            for ($i = 0; yield $result->advance(); ++$i) {
-                $row = $result->getCurrent();
-                $this->assertSame($data[$i][0], $row['domain']);
-                $this->assertSame($data[$i][1], $row['tld']);
-            }
-        })());
-
-        $promises[] = new Coroutine((function () {
-            /** @var Statement $statement */
-            $statement = (yield $this->connection->prepare("SELECT * FROM test"));
-
-            /** @var \Amp\Postgres\ResultSet $result */
-            $result = yield $statement->execute();
-
-            $data = $this->getData();
-
-            for ($i = 0; yield $result->advance(); ++$i) {
-                $row = $result->getCurrent();
-                $this->assertSame($data[$i][0], $row['domain']);
-                $this->assertSame($data[$i][1], $row['tld']);
-            }
-        })());
-
-        return Promise\all($promises);
-    }
-
-    public function testSimultaneousPrepareAndExecute(): Promise
-    {
-        $promises[] = new Coroutine((function () {
-            /** @var Statement $statement */
-            $statement = yield $this->connection->prepare("SELECT * FROM test");
-
-            /** @var \Amp\Postgres\ResultSet $result */
-            $result = yield $statement->execute();
-
-            $data = $this->getData();
-
-            for ($i = 0; yield $result->advance(); ++$i) {
-                $row = $result->getCurrent();
-                $this->assertSame($data[$i][0], $row['domain']);
-                $this->assertSame($data[$i][1], $row['tld']);
-            }
-        })());
-
-        $promises[] = new Coroutine((function () {
-            /** @var \Amp\Postgres\ResultSet $result */
-            $result = yield $this->connection->execute("SELECT * FROM test");
-
-            $data = $this->getData();
-
-            for ($i = 0; yield $result->advance(); ++$i) {
-                $row = $result->getCurrent();
-                $this->assertSame($data[$i][0], $row['domain']);
-                $this->assertSame($data[$i][1], $row['tld']);
-            }
-        })());
-
-        return Promise\all($promises);
-    }
-
-    public function testTransaction(): \Generator
-    {
-        $isolation = SqlTransaction::ISOLATION_COMMITTED;
-
-        /** @var \Amp\Postgres\Transaction $transaction */
-        $transaction = yield $this->connection->beginTransaction($isolation);
-
-        $this->assertInstanceOf(Transaction::class, $transaction);
+        $transaction = $connection->beginTransaction($isolation);
 
         $data = $this->getData()[0];
 
-        $this->assertTrue($transaction->isAlive());
+//        $this->assertTrue($transaction->isAlive());
         $this->assertTrue($transaction->isActive());
         $this->assertSame($isolation, $transaction->getIsolationLevel());
 
-        yield $transaction->createSavepoint('test');
+        $transaction->createSavepoint('test');
 
-        $statement = yield $transaction->prepare("SELECT * FROM test WHERE domain=:domain");
-        $result = yield $statement->execute(['domain' => $data[0]]);
-
-        $this->assertInstanceOf(ResultSet::class, $result);
-
-        unset($result); // Force destruction of result object.
-
-        $result = yield $transaction->execute("SELECT * FROM test WHERE domain=\$1 FOR UPDATE", [$data[0]]);
+        $statement = $transaction->prepare("SELECT * FROM test WHERE domain=:domain");
+        $result = $statement->execute(['domain' => $data[0]]);
 
         $this->assertInstanceOf(ResultSet::class, $result);
 
         unset($result); // Force destruction of result object.
 
-        yield $transaction->rollbackTo('test');
+        $result = $transaction->execute("SELECT * FROM test WHERE domain=\$1 FOR UPDATE", [$data[0]]);
 
-        yield $transaction->commit();
+        $this->assertInstanceOf(ResultSet::class, $result);
 
-        $this->assertFalse($transaction->isAlive());
+        unset($result); // Force destruction of result object.
+
+        $transaction->rollbackTo('test');
+
+        $transaction->commit();
+
+//        $this->assertFalse($transaction->isAlive());
         $this->assertFalse($transaction->isActive());
 
         try {
-            $result = yield $transaction->execute("SELECT * FROM test");
+            $result = $transaction->execute("SELECT * FROM test");
             $this->fail('Query should fail after transaction commit');
         } catch (TransactionError $exception) {
             // Exception expected.
         }
     }
 
-    public function testListen(): \Generator
+    public function testListen(): void
     {
         $channel = "test";
-        /** @var \Amp\Postgres\Listener $listener */
-        $listener = yield $this->connection->listen($channel);
+        $count = 0;
+
+        $connection = $this->getConnection();
+        $connection->listen(
+            $channel,
+            function (Notification $notification) use ($channel, &$count) {
+                $this->assertSame($channel, $notification->channel);
+                $this->assertSame((string)$count, $notification->payload);
+                $count++;
+            }
+        );
+
+        Timer::after(
+            100,
+            function () use ($channel, $connection) {
+                try {
+                    $connection->query(sprintf("NOTIFY %s, '%s'", $channel, '0'));
+                    $connection->query(sprintf("NOTIFY %s, '%s'", $channel, '1'));
+                } catch (Throwable $e) {
+                    $this->fail("Query error: {$e->getMessage()}");
+                }
+            }
+        );
+
+        $chan = new Coroutine\Channel(1);
+
+        Timer::after(
+            300,
+            function () use ($channel, $connection, $chan) {
+                try {
+                    $connection->unlisten($channel);
+                } catch (Throwable $e) {
+                    $this->fail("Unlisten error: {$e->getMessage()}");
+                } finally {
+                    $chan->push(1, 0.001);
+                }
+            }
+        );
+
+        $chan->pop(2);
+
+        $this->assertSame(2, $count);
+    }
+
+    public function testListenWithoutCallable(): void
+    {
+        $channel = "test";
+        $count = 0;
+
+        $connection = $this->getConnection();
+        $listener = $connection->listen($channel, null);
 
         $this->assertInstanceOf(Listener::class, $listener);
-        $this->assertSame($channel, $listener->getChannel());
 
-        Loop::delay(100, function () use ($channel) {
-            yield $this->connection->query(\sprintf("NOTIFY %s, '%s'", $channel, '0'));
-            yield $this->connection->query(\sprintf("NOTIFY %s, '%s'", $channel, '1'));
-        });
+        Coroutine::create(
+            function (Listener $listener) use (&$count, $channel) {
+                while ($notification = $listener->getNotification()) {
+                    $this->assertSame($channel, $notification->channel);
+                    $this->assertSame((string)$count, $notification->payload);
+                    $count++;
+                }
+            },
+            $listener
+        );
 
+        Timer::after(
+            100,
+            function () use ($channel, $connection) {
+                try {
+                    $connection->query(sprintf("NOTIFY %s, '%s'", $channel, '0'));
+                    $connection->query(sprintf("NOTIFY %s, '%s'", $channel, '1'));
+                } catch (Throwable $e) {
+                    $this->fail("Query error: {$e->getMessage()}");
+                }
+            }
+        );
+
+        $chan = new Coroutine\Channel(1);
+
+        Timer::after(
+            300,
+            function () use ($channel, $connection, $chan) {
+                try {
+                    $connection->unlisten($channel);
+                } catch (Throwable $e) {
+                    $this->fail("Unlisten error: {$e->getMessage()}");
+                } finally {
+                    $chan->push(1, 0.001);
+                }
+            }
+        );
+
+        $chan->pop(2);
+
+        $this->assertSame(2, $count);
+    }
+
+    public function testListenWithoutCallableAndConnectionClosed(): void
+    {
+        $this->expectException(ConnectionException::class);
+
+        $channel = "test";
         $count = 0;
-        Loop::delay(200, function () use ($listener) {
-            $listener->unlisten();
-        });
 
-        while (yield $listener->advance()) {
-            $this->assertSame($listener->getCurrent()->payload, (string)$count++);
+        $connection = $this->getConnection();
+        $listener = $connection->listen($channel, null);
+
+        $this->assertInstanceOf(Listener::class, $listener);
+
+        $chan = new Coroutine\Channel(1);
+        $ex = null;
+        // connection object is passed to prevent it from destruction
+        Coroutine::create(
+            function (Listener $listener, Connection $connection) use (&$count, $channel, &$ex, $chan) {
+                try {
+                    while ($notification = $listener->getNotification()) {
+                        $this->assertSame($channel, $notification->channel);
+                        $this->assertSame((string)$count, $notification->payload);
+                        $count++;
+                    }
+                } catch (ConnectionException $e) {
+                    $ex = $e;
+                }
+            },
+            $listener,
+            $connection
+        );
+
+        Timer::after(
+            100,
+            function () use ($connection) {
+                try {
+                    $connection->query('SELECT pg_terminate_backend(pg_backend_pid())');
+                } catch (Throwable $e) {
+                    $this->fail("Query error: {$e->getMessage()}");
+                }
+            }
+        );
+
+        $chan->pop(0.5);
+
+        // work-around swoole event loop get stuck, because it can't remove event from broken descriptor
+        Event::exit();
+        if ($ex) {
+            throw $ex;
         }
+    }
+
+    /**
+     * @depends testListen
+     */
+    public function testNotify(): void
+    {
+        $channel = "test";
+        $count = 0;
+
+        $connection = $this->getConnection();
+        $connection->listen(
+            $channel,
+            function (Notification $notification) use ($channel, &$count) {
+                $this->assertSame($channel, $notification->channel);
+                $this->assertSame((string)$count, $notification->payload);
+                $count++;
+            }
+        );
+
+        Timer::after(
+            100,
+            function () use ($channel, $connection) {
+                try {
+                    $connection->notify($channel, '0');
+                    $connection->notify($channel, '1');
+                } catch (Throwable $e) {
+                    $this->fail("Query error: {$e->getMessage()}");
+                }
+            }
+        );
+
+        $chan = new Coroutine\Channel(1);
+
+        Timer::after(
+            300,
+            function () use ($channel, $connection, $chan) {
+                try {
+                    $connection->unlisten($channel);
+                } catch (Throwable $e) {
+                    $this->fail("Unlisten error: {$e->getMessage()}");
+                } finally {
+                    $chan->push(1, 0.001);
+                }
+            }
+        );
+
+        $chan->pop(0.5);
 
         $this->assertSame(2, $count);
     }
@@ -719,39 +860,24 @@ class ConnectionTest extends CoroTestCase
     /**
      * @depends testListen
      */
-    public function testNotify(): \Generator
+    public function testListenOnSameChannel(): void
     {
         $channel = "test";
-        /** @var \Amp\Postgres\Listener $listener */
-        $listener = yield $this->connection->listen($channel);
 
-        Loop::delay(100, function () use ($channel) {
-            yield $this->connection->notify($channel, '0');
-            yield $this->connection->notify($channel, '1');
-        });
+        $this->expectException(FailureException::class);
+        $this->expectExceptionMessage("Listener on {$channel} already exists");
 
-        $count = 0;
-        Loop::delay(200, function () use ($listener) {
-            $listener->unlisten();
-        });
-
-        while (yield $listener->advance()) {
-            $this->assertSame($listener->getCurrent()->payload, (string)$count++);
-        }
-
-        $this->assertSame(2, $count);
-    }
-
-    /**
-     * @depends testListen
-     */
-    public function testListenOnSameChannel(): Promise
-    {
-        $this->expectException(QueryError::class);
-        $this->expectExceptionMessage('Already listening on channel');
-
-        $channel = "test";
-        return Promise\all([$this->connection->listen($channel), $this->connection->listen($channel)]);
+        $connection = $this->getConnection();
+        $connection->listen(
+            $channel,
+            function () {
+            }
+        );
+        $connection->listen(
+            $channel,
+            function () {
+            }
+        );
     }
 
     /**

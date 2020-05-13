@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres;
 
-use function implode;
 use function addcslashes;
+use function implode;
 
 class ConnectConfig
 {
