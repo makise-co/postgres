@@ -12,6 +12,7 @@ namespace MakiseCo\Postgres;
 
 use Closure;
 use Swoole\Coroutine\Channel;
+use Throwable;
 
 final class Listener
 {
@@ -30,7 +31,7 @@ final class Listener
      * @return Notification|null null is returned where listener was closed
      * @throws Exception\ConnectionException when connect is closed
      * @throws Exception\FailureException when listener is closed
-     * @throws \Throwable on unknown state
+     * @throws Throwable on unknown state
      */
     public function getNotification(float $timeout = 0): ?Notification
     {
@@ -54,7 +55,7 @@ final class Listener
             throw $res;
         }
 
-        if ($res instanceof \Throwable) {
+        if ($res instanceof Throwable) {
             throw $res;
         }
 
