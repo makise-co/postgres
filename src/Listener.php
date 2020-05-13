@@ -16,14 +16,21 @@ use Throwable;
 
 final class Listener
 {
+    private string $listenChannel;
     private Channel $chan;
     private Closure $unlisten;
     private bool $isClosed = false;
 
-    public function __construct(Channel $chan, Closure $unlisten)
+    public function __construct(string $listenChannel, Channel $chan, Closure $unlisten)
     {
         $this->chan = $chan;
         $this->unlisten = $unlisten;
+        $this->listenChannel = $listenChannel;
+    }
+
+    public function __destruct()
+    {
+        $this->close();
     }
 
     /**
@@ -62,9 +69,9 @@ final class Listener
         return $res;
     }
 
-    public function __destruct()
+    public function getChannel(): string
     {
-        $this->close();
+        return $this->listenChannel;
     }
 
     public function isClosed(): bool

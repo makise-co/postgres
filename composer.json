@@ -1,8 +1,16 @@
 {
-    "name": "makise-co/swoole-postgres",
-    "description": "A Pure PHP client for PostgreSQL based on libpq",
+    "name": "makise-co/postgres",
+    "description": "A Pure coroutine PHP client for PostgreSQL based on libpq",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "swoole",
+        "pgsql",
+        "postgres",
+        "client",
+        "coro",
+        "coroutine"
+    ],
     "authors": [
         {
             "name": "Dmitry K.",

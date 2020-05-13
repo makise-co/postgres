@@ -433,9 +433,12 @@ class PqHandle implements ExecutorInterface, QuoterInterface
         $this->listenerChans[$channel] = $emitter;
         if (null !== $emitter) {
             return new Listener(
+                $channel,
                 $emitter,
                 function () use ($channel) {
-                    $this->unlisten($channel);
+                    if ($this->pq) {
+                        $this->unlisten($channel);
+                    }
                 }
             );
         }
@@ -544,9 +547,9 @@ class PqHandle implements ExecutorInterface, QuoterInterface
 
         $this->queryContext->take();
 
-        if ($this->pq->busy) {
-            throw new Exception\FailureException("Please fetch results from previous operation");
-        }
+//        if ($this->pq->busy) {
+//            throw new Exception\FailureException("Please fetch results from previous operation");
+//        }
 
         if ($closure) {
             try {
