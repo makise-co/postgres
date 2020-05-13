@@ -24,6 +24,10 @@ Prepared statements and parameterized queries support named placeholders, as wel
 More examples can be found in the [`examples`](examples) directory.
 
 ```php
+<?php
+
+declare(strict_types=1);
+
 use MakiseCo\Postgres\ConnectConfigBuilder;
 use MakiseCo\Postgres\Connection;
 use MakiseCo\Postgres\ResultSet;
