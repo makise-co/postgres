@@ -15,17 +15,15 @@ use MakiseCo\Postgres\Sql\StatementInterface;
 
 class PooledStatement implements StatementInterface
 {
-    private ?Statement $statement;
-    private Closure $release;
+    private Statement $statement;
+    private ?Closure $release = null;
     private int $refCount = 1;
 
     public function __construct(Statement $statement, Closure $release)
     {
-        $this->release = $release;
+        $this->statement = $statement;
 
         if ($statement->isAlive()) {
-            $this->statement = $statement;
-
             $refCount = &$this->refCount;
             $this->release = static function () use (&$refCount, $release) {
                 if (--$refCount === 0) {
@@ -34,7 +32,6 @@ class PooledStatement implements StatementInterface
             };
         } else {
             $release();
-            $this->statement = null;
         }
     }
 
