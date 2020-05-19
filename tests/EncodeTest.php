@@ -12,7 +12,6 @@ namespace MakiseCo\Postgres\Tests;
 
 use Error;
 use PHPUnit\Framework\TestCase;
-
 use stdClass;
 
 use function implode;

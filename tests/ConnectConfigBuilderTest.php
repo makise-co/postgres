@@ -10,16 +10,16 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Tests;
 
-use MakiseCo\Postgres\ConnectConfigBuilder;
+use MakiseCo\Postgres\ConnectionConfigBuilder;
 use PHPUnit\Framework\TestCase;
 
 class ConnectConfigBuilderTest extends TestCase
 {
-    private ConnectConfigBuilder $builder;
+    private ConnectionConfigBuilder $builder;
 
     protected function setUp(): void
     {
-        $this->builder = new ConnectConfigBuilder();
+        $this->builder = new ConnectionConfigBuilder();
     }
 
     public function testWithBasicParams(): void

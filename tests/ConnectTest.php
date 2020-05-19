@@ -12,7 +12,6 @@ namespace MakiseCo\Postgres\Tests;
 
 use MakiseCo\Postgres\Exception\ConnectionException;
 use MakiseCo\Postgres\PqConnector;
-
 use pq\Connection;
 
 use function sprintf;

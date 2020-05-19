@@ -13,7 +13,7 @@ namespace MakiseCo\Postgres\Sql;
 use MakiseCo\Postgres\CommandResult;
 use MakiseCo\Postgres\Exception\TransactionError;
 
-interface TransactionInterface extends QuoterInterface
+interface TransactionInterface extends ExecutorInterface, QuoterInterface
 {
     public const ISOLATION_UNCOMMITTED = 0;
     public const ISOLATION_COMMITTED = 1;

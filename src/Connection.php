@@ -11,17 +11,19 @@ declare(strict_types=1);
 namespace MakiseCo\Postgres;
 
 use Closure;
-use InvalidArgumentException;
 use MakiseCo\Postgres\Exception;
 use MakiseCo\Postgres\Sql\ExecutorInterface;
 use MakiseCo\Postgres\Sql\QuoterInterface;
+use MakiseCo\Postgres\Sql\ReceiverInterface;
+use Throwable;
 
-class Connection implements ExecutorInterface, QuoterInterface
+class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterface
 {
-    private ConnectConfig $config;
+    private ConnectionConfig $config;
     private ?PqHandle $handle = null;
+    private ?Throwable $connError = null;
 
-    public function __construct(ConnectConfig $config)
+    public function __construct(ConnectionConfig $config)
     {
         $this->config = $config;
     }
@@ -43,8 +45,15 @@ class Connection implements ExecutorInterface, QuoterInterface
         }
 
         $connector = new PqConnector($this->config);
-        $pq = $connector->connect();
+        try {
+            $pq = $connector->connect();
+        } catch (Throwable $e) {
+            $this->connError = $e;
 
+            throw $e;
+        }
+
+        $this->connError = null;
         $this->handle = new PqHandle($pq);
     }
 
@@ -54,6 +63,7 @@ class Connection implements ExecutorInterface, QuoterInterface
             return;
         }
 
+        $this->connError = null;
         $this->handle->disconnect();
     }
 
@@ -75,6 +85,15 @@ class Connection implements ExecutorInterface, QuoterInterface
      */
     public function query(string $sql, float $timeout = 0)
     {
+        if (null === $this->handle) {
+            // connError is used for connection pooling feature
+            if ($this->connError) {
+                throw $this->connError;
+            }
+
+            throw new Exception\ConnectionException('Connection is closed');
+        }
+
         return $this->handle->query($sql, $timeout);
     }
 
@@ -83,6 +102,15 @@ class Connection implements ExecutorInterface, QuoterInterface
      */
     public function execute(string $sql, array $params = [], array $types = [], float $timeout = 0)
     {
+        if (null === $this->handle) {
+            // connError is used for connection pooling feature
+            if ($this->connError) {
+                throw $this->connError;
+            }
+
+            throw new Exception\ConnectionException('Connection is closed');
+        }
+
         return $this->handle->execute($sql, $params, $types, $timeout);
     }
 
@@ -91,23 +119,32 @@ class Connection implements ExecutorInterface, QuoterInterface
      */
     public function prepare(string $sql, ?string $name = null, array $types = [], float $timeout = 0): Statement
     {
+        if (null === $this->handle) {
+            // connError is used for connection pooling feature
+            if ($this->connError) {
+                throw $this->connError;
+            }
+
+            throw new Exception\ConnectionException('Connection is closed');
+        }
+
         return $this->handle->prepare($sql, $name, $types, $timeout);
     }
 
     /**
-     * @param string $channel Channel name.
-     * @param Closure|null $callable Notifications receiver callback.
-     * @param float $timeout Maximum allowed time (seconds) to wait results from database. (optional)
-     *
-     * @return Listener|null When callable is null - Listener object is returned
-     *      When callable is not null - null is returned
-     *
-     * @throws Exception\FailureException If the operation fails due to unexpected condition.
-     * @throws Exception\ConnectionException If the connection to the database is lost.
-     * @throws Exception\QueryError If the operation fails due to an error in the query (such as a syntax error).
+     * {@inheritDoc}
      */
     public function listen(string $channel, ?Closure $callable, float $timeout = 0): ?Listener
     {
+        if (null === $this->handle) {
+            // connError is used for connection pooling feature
+            if ($this->connError) {
+                throw $this->connError;
+            }
+
+            throw new Exception\ConnectionException('Connection is closed');
+        }
+
         return $this->handle->listen($channel, $callable, $timeout);
     }
 
@@ -116,6 +153,15 @@ class Connection implements ExecutorInterface, QuoterInterface
      */
     public function notify(string $channel, string $payload, float $timeout = 0): CommandResult
     {
+        if (null === $this->handle) {
+            // connError is used for connection pooling feature
+            if ($this->connError) {
+                throw $this->connError;
+            }
+
+            throw new Exception\ConnectionException('Connection is closed');
+        }
+
         return $this->handle->notify($channel, $payload, $timeout);
     }
 
@@ -132,47 +178,33 @@ class Connection implements ExecutorInterface, QuoterInterface
      */
     public function unlisten(string $channel, float $timeout = 0): CommandResult
     {
+        if (null === $this->handle) {
+            // connError is used for connection pooling feature
+            if ($this->connError) {
+                throw $this->connError;
+            }
+
+            throw new Exception\ConnectionException('Connection is closed');
+        }
+
         return $this->handle->unlisten($channel, $timeout);
     }
 
     /**
-     * Starts a transaction on a single connection.
-     *
-     * @param int $isolation Transaction isolation level.
-     *
-     * @return Transaction
-     *
-     * @throws Exception\FailureException
+     * {@inheritDoc}
      */
     final public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
     {
-        // TODO: Add support for READ ONLY transactions
-        // TODO: Add support for DEFERRABLE transactions
-        // Link: https://www.postgresql.org/docs/9.1/sql-set-transaction.html
-        // Link: https://mdref.m6w6.name/pq/Connection/startTransaction
+        if (null === $this->handle) {
+            // connError is used for connection pooling feature
+            if ($this->connError) {
+                throw $this->connError;
+            }
 
-        switch ($isolation) {
-            case Transaction::ISOLATION_UNCOMMITTED:
-                $this->handle->query("BEGIN TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
-                break;
-
-            case Transaction::ISOLATION_COMMITTED:
-                $this->handle->query("BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED");
-                break;
-
-            case Transaction::ISOLATION_REPEATABLE:
-                $this->handle->query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ");
-                break;
-
-            case Transaction::ISOLATION_SERIALIZABLE:
-                $this->handle->query("BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE");
-                break;
-
-            default:
-                throw new InvalidArgumentException("Invalid transaction type");
+            throw new Exception\ConnectionException('Connection is closed');
         }
 
-        return new Transaction($this->handle, $isolation);
+        return $this->handle->beginTransaction($isolation);
     }
 
     /**
@@ -180,6 +212,15 @@ class Connection implements ExecutorInterface, QuoterInterface
      */
     final public function quoteString(string $data): string
     {
+        if (null === $this->handle) {
+            // connError is used for connection pooling feature
+            if ($this->connError) {
+                throw $this->connError;
+            }
+
+            throw new Exception\ConnectionException('Connection is closed');
+        }
+
         return $this->handle->quoteString($data);
     }
 
@@ -188,6 +229,15 @@ class Connection implements ExecutorInterface, QuoterInterface
      */
     final public function quoteName(string $name): string
     {
+        if (null === $this->handle) {
+            // connError is used for connection pooling feature
+            if ($this->connError) {
+                throw $this->connError;
+            }
+
+            throw new Exception\ConnectionException('Connection is closed');
+        }
+
         return $this->handle->quoteName($name);
     }
 }

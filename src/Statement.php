@@ -10,11 +10,12 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres;
 
+use MakiseCo\Postgres\Sql\StatementInterface;
 use pq\Statement as PqStatement;
 
 use function time;
 
-class Statement
+class Statement implements StatementInterface
 {
     private PqHandle $handle;
 

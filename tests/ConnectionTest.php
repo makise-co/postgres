@@ -13,8 +13,8 @@ namespace MakiseCo\Postgres\Tests;
 use Error;
 use MakiseCo\Postgres\BufferedResultSet;
 use MakiseCo\Postgres\CommandResult;
-use MakiseCo\Postgres\ConnectConfig;
 use MakiseCo\Postgres\Connection;
+use MakiseCo\Postgres\ConnectionConfig;
 use MakiseCo\Postgres\Exception\ConcurrencyException;
 use MakiseCo\Postgres\Exception\ConnectionException;
 use MakiseCo\Postgres\Exception\FailureException;
@@ -41,7 +41,7 @@ class ConnectionTest extends CoroTestCase
         getConnection as parentGetConnection;
     }
 
-    protected function getConnection(?ConnectConfig $config = null): Connection
+    protected function getConnection(?ConnectionConfig $config = null): Connection
     {
         $connection = $this->parentGetConnection($config);
 
@@ -878,18 +878,5 @@ class ConnectionTest extends CoroTestCase
             function () {
             }
         );
-    }
-
-    /**
-     * @return array Start test data for database.
-     */
-    public function getData(): array
-    {
-        return [
-            ['amphp', 'org'],
-            ['github', 'com'],
-            ['google', 'com'],
-            ['php', 'net'],
-        ];
     }
 }

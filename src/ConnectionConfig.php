@@ -13,7 +13,7 @@ namespace MakiseCo\Postgres;
 use function addcslashes;
 use function implode;
 
-class ConnectConfig
+class ConnectionConfig
 {
     private string $host;
     private int $port;
