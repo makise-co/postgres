@@ -17,7 +17,7 @@ use Throwable;
 class PooledListener implements ListenerInterface
 {
     private Listener $listener;
-    private ?Closure $release;
+    private ?Closure $release = null;
 
     public function __construct(Listener $listener, Closure $release)
     {
