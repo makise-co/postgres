@@ -17,15 +17,15 @@ use Throwable;
 class PooledListener implements ListenerInterface
 {
     private Listener $listener;
-    private ?Closure $release;
+    private ?Closure $release = null;
 
     public function __construct(Listener $listener, Closure $release)
     {
+        $this->listener = $listener;
+
         if (!$listener->isListening()) {
             $release();
-            $this->listener = $listener;
         } else {
-            $this->listener = $listener;
             $this->release = $release;
         }
     }
