@@ -21,11 +21,11 @@ class PooledListener implements ListenerInterface
 
     public function __construct(Listener $listener, Closure $release)
     {
+        $this->listener = $listener;
+
         if (!$listener->isListening()) {
             $release();
-            $this->listener = $listener;
         } else {
-            $this->listener = $listener;
             $this->release = $release;
         }
     }
