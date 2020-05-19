@@ -28,14 +28,14 @@ More examples can be found in the [`examples`](examples) directory.
 
 declare(strict_types=1);
 
-use MakiseCo\Postgres\ConnectConfigBuilder;
+use MakiseCo\Postgres\ConnectionConfigBuilder;
 use MakiseCo\Postgres\Connection;
 use MakiseCo\Postgres\ResultSet;
 
 use function Swoole\Coroutine\run;
 
 run(static function () {
-    $config = (new ConnectConfigBuilder())
+    $config = (new ConnectionConfigBuilder())
         ->withHost('127.0.0.1')
         ->withPort(5432)
         ->withUser('makise')
@@ -43,7 +43,7 @@ run(static function () {
         ->withDatabase('cern')
         ->build();
     // or:
-    $config = (new ConnectConfigBuilder())
+    $config = (new ConnectionConfigBuilder())
         ->fromArray([
             'host' => '127.0.0.1',
             'port' => 5432,

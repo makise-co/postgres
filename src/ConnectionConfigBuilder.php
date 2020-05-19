@@ -16,7 +16,7 @@ use function array_merge;
 use function implode;
 use function property_exists;
 
-class ConnectConfigBuilder
+class ConnectionConfigBuilder
 {
     private ?string $host = '127.0.0.1';
     private int $port = 5432;
@@ -208,9 +208,9 @@ class ConnectConfigBuilder
     /**
      * Build connect config
      *
-     * @return ConnectConfig
+     * @return ConnectionConfig
      */
-    public function build(): ConnectConfig
+    public function build(): ConnectionConfig
     {
         $options = [];
         $commands = [];
@@ -238,7 +238,7 @@ class ConnectConfigBuilder
 
         $options = array_merge($this->options, $options);
 
-        return new ConnectConfig(
+        return new ConnectionConfig(
             $this->host,
             $this->port,
             $this->user,

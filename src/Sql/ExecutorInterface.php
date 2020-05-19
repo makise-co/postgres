@@ -14,6 +14,7 @@ use MakiseCo\Postgres\CommandResult;
 use MakiseCo\Postgres\Exception;
 use MakiseCo\Postgres\ResultSet;
 use MakiseCo\Postgres\Statement;
+use MakiseCo\Postgres\Transaction;
 
 interface ExecutorInterface
 {
@@ -53,7 +54,12 @@ interface ExecutorInterface
      *
      * @throws Exception\FailureException If the operation fails due to unexpected condition.
      */
-    public function prepare(string $sql, ?string $name = null, array $types = [], float $timeout = 0): Statement;
+    public function prepare(
+        string $sql,
+        ?string $name = null,
+        array $types = [],
+        float $timeout = 0
+    ): StatementInterface;
 
     /**
      * @param string $channel Channel name.
@@ -66,4 +72,14 @@ interface ExecutorInterface
      * @throws Exception\ConnectionException If the connection to the database is lost.
      */
     public function notify(string $channel, string $payload, float $timeout = 0): CommandResult;
+
+    /**
+     * Starts a transaction on a single connection.
+     * WARNING: Do not use it to nest transactions
+     *
+     * @param int $isolation Transaction isolation level.
+     *
+     * @return TransactionInterface
+     */
+    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): TransactionInterface;
 }

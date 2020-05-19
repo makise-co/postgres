@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Tests;
 
-use MakiseCo\Postgres\ConnectConfig;
 use MakiseCo\Postgres\Connection;
+use MakiseCo\Postgres\ConnectionConfig;
 
 use function getenv;
 
@@ -21,7 +21,7 @@ trait PostgresTrait
         float $connectTimeout = 2,
         bool $unbuffered = true,
         ?string $user = null
-    ): ConnectConfig {
+    ): ConnectionConfig {
         $host = getenv('POSTGRES_HOST');
         if (!$host) {
             $host = 'postgres';
@@ -42,7 +42,7 @@ trait PostgresTrait
             $database = 'makise';
         }
 
-        return new ConnectConfig(
+        return new ConnectionConfig(
             $host,
             5432,
             $user,
@@ -58,7 +58,7 @@ trait PostgresTrait
         );
     }
 
-    protected function getConnection(?ConnectConfig $config = null): Connection
+    protected function getConnection(?ConnectionConfig $config = null): Connection
     {
         if (null === $config) {
             $config = $this->getConnectConfig();
@@ -68,5 +68,18 @@ trait PostgresTrait
         $connection->connect();
 
         return $connection;
+    }
+
+    /**
+     * @return array Start test data for database.
+     */
+    public function getData(): array
+    {
+        return [
+            ['amphp', 'org'],
+            ['github', 'com'],
+            ['google', 'com'],
+            ['php', 'net'],
+        ];
     }
 }

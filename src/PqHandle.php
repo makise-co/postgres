@@ -12,8 +12,11 @@ namespace MakiseCo\Postgres;
 
 use Closure;
 use Error;
+use InvalidArgumentException;
 use MakiseCo\Postgres\Sql\ExecutorInterface;
 use MakiseCo\Postgres\Sql\QuoterInterface;
+use MakiseCo\Postgres\Sql\ReceiverInterface;
+use MakiseCo\Postgres\Sql\TransactionInterface;
 use pq;
 use pq\Connection as PqConnection;
 use pq\Result;
@@ -22,7 +25,7 @@ use Swoole\Event;
 use Swoole\Timer;
 use Throwable;
 
-class PqHandle implements ExecutorInterface, QuoterInterface
+class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
 {
     /**
      * @var PqConnection|null holds an active pq\Connection instance
@@ -287,6 +290,40 @@ class PqHandle implements ExecutorInterface, QuoterInterface
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
+    {
+        // TODO: Add support for READ ONLY transactions
+        // TODO: Add support for DEFERRABLE transactions
+        // Link: https://www.postgresql.org/docs/9.1/sql-set-transaction.html
+        // Link: https://mdref.m6w6.name/pq/Connection/startTransaction
+
+        switch ($isolation) {
+            case Transaction::ISOLATION_UNCOMMITTED:
+                $this->query("BEGIN TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+                break;
+
+            case Transaction::ISOLATION_COMMITTED:
+                $this->query("BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED");
+                break;
+
+            case Transaction::ISOLATION_REPEATABLE:
+                $this->query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+                break;
+
+            case Transaction::ISOLATION_SERIALIZABLE:
+                $this->query("BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+                break;
+
+            default:
+                throw new InvalidArgumentException("Invalid transaction type");
+        }
+
+        return new Transaction($this, $isolation);
+    }
+
+    /**
      * @param string $name
      * @param float $timeout Maximum allowed time (seconds) to wait results from database. (optional)
      * @throws Exception\FailureException
@@ -364,15 +401,7 @@ class PqHandle implements ExecutorInterface, QuoterInterface
     }
 
     /**
-     * @param string $channel Channel name.
-     * @param Closure|null $callable Notifications receiver callback.
-     * @param float $timeout Maximum allowed time (seconds) to wait results from database. (optional)
-     *
-     * @return Listener|null When callable is null - Listener object is returned
-     *      When callable is not null - null is returned
-     *
-     * @throws Exception\FailureException If the operation fails due to unexpected condition.
-     * @throws Exception\ConnectionException If the connection to the database is lost.
+     * {@inheritDoc}
      */
     public function listen(string $channel, ?Closure $callable, float $timeout = 0): ?Listener
     {

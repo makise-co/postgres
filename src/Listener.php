@@ -11,10 +11,11 @@ declare(strict_types=1);
 namespace MakiseCo\Postgres;
 
 use Closure;
+use MakiseCo\Postgres\Sql\ListenerInterface;
 use Swoole\Coroutine\Channel;
 use Throwable;
 
-final class Listener
+final class Listener implements ListenerInterface
 {
     private string $listenChannel;
     private Channel $chan;
@@ -30,7 +31,7 @@ final class Listener
 
     public function __destruct()
     {
-        $this->close();
+        $this->unlisten();
     }
 
     /**
@@ -74,12 +75,12 @@ final class Listener
         return $this->listenChannel;
     }
 
-    public function isClosed(): bool
+    public function isListening(): bool
     {
-        return $this->isClosed;
+        return !$this->isClosed;
     }
 
-    public function close(): void
+    public function unlisten(): void
     {
         if ($this->isClosed) {
             return;

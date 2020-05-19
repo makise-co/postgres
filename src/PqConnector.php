@@ -22,10 +22,10 @@ use function sprintf;
 class PqConnector
 {
     private pq\Connection $pq;
-    private ConnectConfig $config;
+    private ConnectionConfig $config;
     private ConnectContext $connectContext;
 
-    public function __construct(ConnectConfig $config)
+    public function __construct(ConnectionConfig $config)
     {
         $this->config = $config;
     }

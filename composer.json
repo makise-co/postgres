@@ -22,7 +22,8 @@
     "require": {
         "php": ">=7.4",
         "ext-swoole": ">=4.4",
-        "ext-pq": "*"
+        "ext-pq": "*",
+        "open-smf/connection-pool": "^1.0"
     },
     "require-dev": {
         "swoole/ide-helper": "^4.5",

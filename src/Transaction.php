@@ -61,7 +61,7 @@ class Transaction implements TransactionInterface
     }
 
     /**
-     * @return bool True if the transaction is active, false if it has been committed or rolled back.
+     * {@inheritDoc}
      */
     public function isActive(): bool
     {
@@ -69,7 +69,7 @@ class Transaction implements TransactionInterface
     }
 
     /**
-     * @return int
+     * {@inheritDoc}
      */
     public function getIsolationLevel(): int
     {
@@ -77,66 +77,55 @@ class Transaction implements TransactionInterface
     }
 
     /**
-     * @param string $sql SQL query to execute.
-     *
-     * @return CommandResult|ResultSet
-     *
-     * @throws Exception\FailureException If the operation fails due to unexpected condition.
-     * @throws Exception\ConnectionException If the connection to the database is lost.
-     * @throws Exception\QueryError If the operation fails due to an error in the query (such as a syntax error).
+     * {@inheritDoc}
      */
-    public function query(string $sql)
+    public function query(string $sql, float $timeout = 0)
     {
         if ($this->handle === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return $this->handle->query($sql);
+        return $this->handle->query($sql, $timeout);
     }
 
     /**
-     * @param string $sql SQL query to prepare.
-     *
-     * @return Statement
-     *
-     * @throws Exception\FailureException If the operation fails due to unexpected condition.
-     * @throws Exception\ConnectionException If the connection to the database is lost.
-     * @throws Exception\QueryError If the operation fails due to an error in the query (such as a syntax error).
+     * {@inheritDoc}
      */
-    public function prepare(string $sql): Statement
+    public function prepare(string $sql, ?string $name = null, array $types = [], float $timeout = 0): Statement
     {
         if ($this->handle === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return $this->handle->prepare($sql);
+        return $this->handle->prepare($sql, $name, $types, $timeout);
     }
 
     /**
-     * @param string $sql SQL query to prepare and execute.
-     * @param mixed[] $params Query parameters.
-     *
-     * @return CommandResult|ResultSet
-     *
-     * @throws Exception\FailureException If the operation fails due to unexpected condition.
-     * @throws Exception\ConnectionException If the connection to the database is lost.
-     * @throws Exception\QueryError If the operation fails due to an error in the query (such as a syntax error).
+     * {@inheritDoc}
      */
-    public function execute(string $sql, array $params = [])
+    public function execute(string $sql, array $params = [], array $types = [], float $timeout = 0)
     {
         if ($this->handle === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return $this->handle->execute($sql, $params);
+        return $this->handle->execute($sql, $params, $types, $timeout);
     }
 
     /**
-     * Commits the transaction and makes it inactive.
-     *
-     * @return CommandResult
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
+     * {@inheritDoc}
+     */
+    public function notify(string $channel, string $payload, float $timeout = 0): CommandResult
+    {
+        if ($this->handle === null) {
+            throw new TransactionError("The transaction has been committed or rolled back");
+        }
+
+        return $this->handle->notify($channel, $payload, $timeout);
+    }
+
+    /**
+     * {@inheritDoc}
      */
     public function commit(): CommandResult
     {
@@ -151,11 +140,7 @@ class Transaction implements TransactionInterface
     }
 
     /**
-     * Rolls back the transaction and makes it inactive.
-     *
-     * @return CommandResult
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
+     * {@inheritDoc}
      */
     public function rollback(): CommandResult
     {
@@ -170,13 +155,7 @@ class Transaction implements TransactionInterface
     }
 
     /**
-     * Creates a savepoint with the given identifier.
-     *
-     * @param string $identifier Savepoint identifier.
-     *
-     * @return CommandResult
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
+     * {@inheritDoc}
      */
     public function createSavepoint(string $identifier): CommandResult
     {
@@ -188,13 +167,7 @@ class Transaction implements TransactionInterface
     }
 
     /**
-     * Rolls back to the savepoint with the given identifier.
-     *
-     * @param string $identifier Savepoint identifier.
-     *
-     * @return CommandResult
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
+     * {@inheritDoc}
      */
     public function rollbackTo(string $identifier): CommandResult
     {
@@ -206,13 +179,7 @@ class Transaction implements TransactionInterface
     }
 
     /**
-     * Releases the savepoint with the given identifier.
-     *
-     * @param string $identifier Savepoint identifier.
-     *
-     * @return CommandResult
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
+     * {@inheritDoc}
      */
     public function releaseSavepoint(string $identifier): CommandResult
     {
@@ -221,6 +188,18 @@ class Transaction implements TransactionInterface
         }
 
         return $this->query("RELEASE SAVEPOINT " . $this->quoteName($identifier));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
+    {
+        if ($this->handle === null) {
+            throw new TransactionError("The transaction has been committed or rolled back");
+        }
+
+        return $this->handle->beginTransaction($isolation);
     }
 
     /**
