@@ -106,6 +106,8 @@ class ConnectionPool extends BaseConnectionPool implements ExecutorInterface, Re
 
     /**
      * {@inheritDoc}
+     *
+     * WARNING: Do not cache objects returned from this method, otherwise connection will never be released into pool
      */
     public function prepare(string $sql, ?string $name = null, array $types = [], float $timeout = 0): PooledStatement
     {

@@ -102,6 +102,8 @@ class PoolTest extends CoroTestCase
 
         $statement = $this->pool->prepare($query);
 
+        $this->assertSame(1, $this->pool->getIdleCount());
+
         $this->assertSame($query, $statement->getQuery());
 
         $data = $this->getData()[0];
@@ -116,6 +118,10 @@ class PoolTest extends CoroTestCase
             $this->assertSame($data[0], $row['domain']);
             $this->assertSame($data[1], $row['tld']);
         }
+
+        unset($statement); // force statement object destruction
+
+        $this->assertSame(2, $this->pool->getIdleCount());
     }
 
     public function testTransaction(): void
