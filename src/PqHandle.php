@@ -115,7 +115,6 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
             Event::del($this->pq->socket);
 
             $this->pq = null;
-            $this->statements = [];
 
             // close statements
             foreach ($this->statements as $statement) {
