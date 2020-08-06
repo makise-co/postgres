@@ -16,10 +16,8 @@ use InvalidArgumentException;
 use MakiseCo\Postgres\Sql\ExecutorInterface;
 use MakiseCo\Postgres\Sql\QuoterInterface;
 use MakiseCo\Postgres\Sql\ReceiverInterface;
-use MakiseCo\Postgres\Sql\TransactionInterface;
-use pq;
 use pq\Connection as PqConnection;
-use pq\Result;
+use pq\Result as PqResult;
 use Swoole\Coroutine;
 use Swoole\Event;
 use Swoole\Timer;
@@ -52,7 +50,7 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
      */
     private array $listenerChans = [];
 
-    public function __construct(pq\Connection $pq)
+    public function __construct(PqConnection $pq)
     {
         $this->pq = $pq;
         $this->queryContext = new QueryContext();
@@ -78,49 +76,30 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
 
     public function disconnect(): void
     {
-        $this->free(true);
+        $this->free();
     }
 
-    public function getPq(): ?pq\Connection
+    public function getPq(): ?PqConnection
     {
         return $this->pq;
     }
 
-    /**
-     * @param bool $graceful try to close connection gracefully?
-     */
-    private function free(bool $graceful): void
+    private function free(): void
     {
         if (!$this->pq) {
             return;
         }
 
-        if ($graceful) {
-            // close statements
-            try {
-                foreach ($this->statements as $statement) {
-                    $statement->close();
-                }
-            } catch (Throwable $e) {
-                // ignore possible connection errors
-            }
-
-            // drop poll/await events
-            Event::del($this->pq->socket);
-
-            $this->pq = null;
-            $this->statements = [];
-        } else {
-            // drop poll/await events
-            Event::del($this->pq->socket);
-
-            $this->pq = null;
-
-            // close statements
-            foreach ($this->statements as $statement) {
-                $statement->close();
-            }
+        // drop poll/await events
+        Event::del($this->pq->socket);
+        // close libpq instance
+        $this->pq = null;
+        // mark statements as closed
+        foreach ($this->statements as $statement) {
+            $statement->close();
         }
+        // free statements
+        $this->statements = [];
 
         // close listeners
         foreach ($this->listenerChans as $listenerChan) {
@@ -148,7 +127,7 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
             }
         }
 
-        // destruct listeners
+        // free listeners
         $this->listenerChans = [];
     }
 
@@ -172,29 +151,7 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
             $timeout
         );
 
-        switch ($result->status) {
-            case Result::EMPTY_QUERY:
-                throw new Exception\QueryError("Empty query string");
-
-            case Result::COMMAND_OK:
-                return new CommandResult($result);
-
-            case Result::TUPLES_OK:
-                return new BufferedResultSet($result);
-
-            case Result::SINGLE_TUPLE:
-                return new UnbufferedResultSet(Closure::fromCallable([$this, 'fetch']), $result);
-
-            case Result::NONFATAL_ERROR:
-            case Result::FATAL_ERROR:
-                throw new Exception\QueryExecutionError($result->errorMessage, $sql, $result->diag);
-
-            case Result::BAD_RESPONSE:
-                throw new Exception\FailureException($result->errorMessage);
-
-            default:
-                throw new Exception\FailureException("Unknown result status {$result->status}");
-        }
+        return $this->parseQueryResult($result, $sql);
     }
 
     /**
@@ -212,29 +169,7 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
             $timeout
         );
 
-        switch ($result->status) {
-            case Result::EMPTY_QUERY:
-                throw new Exception\QueryError("Empty query string");
-
-            case Result::COMMAND_OK:
-                return new CommandResult($result);
-
-            case Result::TUPLES_OK:
-                return new BufferedResultSet($result);
-
-            case Result::SINGLE_TUPLE:
-                return new UnbufferedResultSet(Closure::fromCallable([$this, 'fetch']), $result);
-
-            case Result::NONFATAL_ERROR:
-            case Result::FATAL_ERROR:
-                throw new Exception\QueryExecutionError($result->errorMessage, $sql, $result->diag);
-
-            case Result::BAD_RESPONSE:
-                throw new Exception\FailureException($result->errorMessage);
-
-            default:
-                throw new Exception\FailureException("Unknown result status {$result->status}");
-        }
+        return $this->parseQueryResult($result, $sql);
     }
 
     /**
@@ -261,21 +196,21 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
         );
 
         switch ($result->status) {
-            case Result::EMPTY_QUERY:
+            case PqResult::EMPTY_QUERY:
                 throw new Exception\QueryError("Empty query string");
 
-            case Result::COMMAND_OK:
-                if (!$pqStatement instanceof pq\Statement) {
+            case PqResult::COMMAND_OK:
+                if (!$pqStatement instanceof \pq\Statement) {
                     throw new Exception\FailureException("prepareAsync returned not a pq\\Statement object");
                 }
                 // success
                 break;
 
-            case Result::NONFATAL_ERROR:
-            case Result::FATAL_ERROR:
+            case PqResult::NONFATAL_ERROR:
+            case PqResult::FATAL_ERROR:
                 throw new Exception\QueryExecutionError($result->errorMessage, $sql, $result->diag);
 
-            case Result::BAD_RESPONSE:
+            case PqResult::BAD_RESPONSE:
                 throw new Exception\FailureException($result->errorMessage);
 
             default:
@@ -374,29 +309,7 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
             $timeout
         );
 
-        switch ($result->status) {
-            case Result::EMPTY_QUERY:
-                throw new Exception\QueryError("Empty query string");
-
-            case Result::COMMAND_OK:
-                return new CommandResult($result);
-
-            case Result::TUPLES_OK:
-                return new BufferedResultSet($result);
-
-            case Result::SINGLE_TUPLE:
-                return new UnbufferedResultSet(Closure::fromCallable([$this, 'fetch']), $result);
-
-            case Result::NONFATAL_ERROR:
-            case Result::FATAL_ERROR:
-                throw new Exception\QueryExecutionError($result->errorMessage, $statement->getQuery(), $result->diag);
-
-            case Result::BAD_RESPONSE:
-                throw new Exception\FailureException($result->errorMessage);
-
-            default:
-                throw new Exception\FailureException("Unknown result status {$result->status}");
-        }
+        return $this->parseQueryResult($result, $statement->getQuery());
     }
 
     /**
@@ -454,7 +367,7 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
             );
         }
 
-        if ($result->status !== Result::COMMAND_OK) {
+        if ($result->status !== PqResult::COMMAND_OK) {
             throw new Exception\FailureException("Unable to listen, status={$result->statusMessage}");
         }
 
@@ -486,7 +399,7 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
             $timeout
         );
 
-        if ($result->status !== Result::TUPLES_OK) {
+        if ($result->status !== PqResult::TUPLES_OK) {
             throw new Exception\FailureException("Unable to notify, status={$result->statusMessage}");
         }
 
@@ -520,7 +433,7 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
         }
         unset($this->listenerChans[$channel]);
 
-        if ($result->status !== Result::COMMAND_OK) {
+        if ($result->status !== PqResult::COMMAND_OK) {
             throw new Exception\FailureException("Unable to unlisten, status={$result->statusMessage}");
         }
 
@@ -552,20 +465,57 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
     }
 
     /**
+     * This method is used to parse query execution result
+     *
+     * @param PqResult $result
+     * @param string $query
+     * @return BufferedResultSet|CommandResult|UnbufferedResultSet
+     * @throws Exception\QueryError
+     * @throws Exception\QueryExecutionError
+     * @throws Exception\FailureException
+     */
+    private function parseQueryResult(PqResult $result, string $query)
+    {
+        switch ($result->status) {
+            case PqResult::EMPTY_QUERY:
+                throw new Exception\QueryError("Empty query string");
+
+            case PqResult::COMMAND_OK:
+                return new CommandResult($result);
+
+            case PqResult::TUPLES_OK:
+                return new BufferedResultSet($result);
+
+            case PqResult::SINGLE_TUPLE:
+                return new UnbufferedResultSet(Closure::fromCallable([$this, 'fetch']), $result);
+
+            case PqResult::NONFATAL_ERROR:
+            case PqResult::FATAL_ERROR:
+                throw new Exception\QueryExecutionError($result->errorMessage, $query, $result->diag);
+
+            case PqResult::BAD_RESPONSE:
+                throw new Exception\FailureException($result->errorMessage);
+
+            default:
+                throw new Exception\FailureException("Unknown result status {$result->status}");
+        }
+    }
+
+    /**
      * This method is used to execute every database operation
      *
      * @param Closure|null $closure
      * @param float $timeout
      * @param mixed ...$params
      *
-     * @return Result
+     * @return PqResult
      *
      * @throws Exception\ConnectionException
      * @throws Exception\ConcurrencyException
      * @throws Exception\FailureException
      * @throws Throwable
      */
-    private function coroExec(?Closure $closure, float $timeout = 0, ...$params): Result
+    private function coroExec(?Closure $closure, float $timeout = 0, ...$params): PqResult
     {
         if (!$this->isConnected()) {
             $this->bgContext->throwError();
@@ -582,7 +532,7 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
         if ($closure) {
             try {
                 $closure($params);
-            } catch (pq\Exception\RuntimeException $e) {
+            } catch (\pq\Exception\RuntimeException $e) {
                 throw new Exception\ConcurrencyException($e);
             }
         }
@@ -591,8 +541,8 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
             if (!$this->pq->flush()) {
                 Event::set($this->pq->socket, null, null, SWOOLE_EVENT_READ | SWOOLE_EVENT_WRITE);
             }
-        } catch (pq\Exception $e) {
-            $this->free(false);
+        } catch (\pq\Exception $e) {
+            $this->free();
 
             throw new Exception\ConnectionException("Flushing the connection failed", 0, $e);
         }
@@ -601,10 +551,10 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
         if ($timeout > 0) {
             $timerId = Timer::after(
                 (int)($timeout * 1000),
-                static function (QueryContext $context, float $timeout, pq\Connection $pq) {
+                static function (QueryContext $context, float $timeout, PqConnection $pq) {
                     $context->timedOut = $timeout;
 
-                    $cancel = new pq\Cancel($pq);
+                    $cancel = new \pq\Cancel($pq);
                     $cancel->cancel();
                 },
                 $this->queryContext,
@@ -626,13 +576,13 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
     /**
      * Used to fetch Unbuffered results from database
      *
-     * @return Result|null
+     * @return PqResult|null
      *
      * @throws Exception\ConcurrencyException
      * @throws Exception\ConnectionException
      * @throws Exception\FailureException
      */
-    private function fetch(): ?Result
+    private function fetch(): ?PqResult
     {
         if (!$this->isConnected()) {
             $this->bgContext->throwError();
@@ -651,10 +601,10 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
         }
 
         switch ($result->status) {
-            case Result::TUPLES_OK: // End of result set.
+            case PqResult::TUPLES_OK: // End of result set.
                 return null;
 
-            case Result::SINGLE_TUPLE:
+            case PqResult::SINGLE_TUPLE:
                 return $result;
 
             default:
@@ -671,15 +621,10 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
         if ($this->pq->poll() === PqConnection::POLLING_FAILED) {
             $errMsg = $this->pq->errorMessage;
 
-            // set bg context before connection gets closed
-            $this->bgContext->setError(Exception\ConnectionException::class, $errMsg);
-
-            // mark connection as dead
-            $this->free(false);
-
-            if ($this->queryContext->busy) {
-                $this->queryContext->resumeWithError(Exception\ConnectionException::class, $errMsg);
-            }
+            $this->handleEventCallbackFatalError(
+                Exception\ConnectionException::class,
+                $errMsg
+            );
 
             return;
         }
@@ -694,25 +639,27 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
 
         $result = $this->pq->getResult();
         if (null === $result) {
+            // broken connection
             if ($this->pq->status === PqConnection::BAD) {
                 $errMsg = $this->pq->errorMessage;
 
-                // set bg context before connection gets closed
-                $this->bgContext->setError(Exception\ConnectionException::class, $errMsg);
-
-                // mark connection as dead
-                $this->free(false);
-
-                $this->queryContext->resumeWithError(Exception\ConnectionException::class, $errMsg);
-            } else {
-                $this->queryContext->resumeWithError(
-                    Exception\FailureException::class,
-                    'Bad result returned from postgres'
+                $this->handleEventCallbackFatalError(
+                    Exception\ConnectionException::class,
+                    $errMsg
                 );
+
+                return;
             }
-        } else {
-            $this->queryContext->resumeWithResult($result);
+
+            $this->queryContext->resumeWithError(
+                Exception\FailureException::class,
+                'Bad result returned from postgres'
+            );
+
+            return;
         }
+
+        $this->queryContext->resumeWithResult($result);
     }
 
     private function awaitCallback(): void
@@ -725,31 +672,31 @@ class PqHandle implements ExecutorInterface, ReceiverInterface, QuoterInterface
             if (!$this->pq->flush()) {
                 return; // Not finished sending data, continue polling for writability.
             }
-        } catch (pq\Exception $exception) {
-            // set bg context before connection gets closed
-            $this->bgContext->setError(
+        } catch (\pq\Exception $exception) {
+            $this->handleEventCallbackFatalError(
                 Exception\ConnectionException::class,
                 "Flushing the connection failed",
                 0,
                 $exception
             );
 
-            // mark connection as dead
-            $this->free(false);
-
-            if ($this->queryContext->busy) {
-                $this->queryContext->resumeWithError(
-                    Exception\ConnectionException::class,
-                    "Flushing the connection failed",
-                    0,
-                    $exception
-                );
-            }
-
             return;
         }
 
         // disable write event
         Event::set($this->pq->socket, null, null, SWOOLE_EVENT_READ);
+    }
+
+    private function handleEventCallbackFatalError(string $exceptionClass, ...$parameters): void
+    {
+        // set bg context before connection gets closed
+        $this->bgContext->setError($exceptionClass, ...$parameters);
+
+        $this->free();
+
+        // resume coroutine if it was suspended
+        if ($this->queryContext->busy) {
+            $this->queryContext->resumeWithError($exceptionClass, ...$parameters);
+        }
     }
 }

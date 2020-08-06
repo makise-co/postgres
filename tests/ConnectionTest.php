@@ -94,6 +94,34 @@ class ConnectionTest extends CoroTestCase
         $stmt->execute([0]);
     }
 
+    /**
+     * @depends testDisconnect
+     */
+    public function testDisconnectWithListener(): void
+    {
+        $connection = $this->getConnection();
+
+        $listener = $connection->listen('makise', null);
+
+        $chan = new Coroutine\Channel(1);
+        Coroutine::create(
+            function (Listener $listener) {
+                while ($notification = $listener->getNotification()) {
+                }
+            },
+            $listener,
+            $connection
+        );
+
+        Timer::after(10, fn() => $connection->disconnect());
+
+        $this->assertTrue($listener->isListening());
+
+        $chan->pop(0.5);
+
+        $this->assertFalse($listener->isListening());
+    }
+
     public function testConnect(): void
     {
         $connection = $this->getConnection();
@@ -672,7 +700,7 @@ class ConnectionTest extends CoroTestCase
         );
 
         Timer::after(
-            100,
+            10,
             function () use ($channel, $connection) {
                 try {
                     $connection->query(sprintf("NOTIFY %s, '%s'", $channel, '0'));
@@ -686,7 +714,7 @@ class ConnectionTest extends CoroTestCase
         $chan = new Coroutine\Channel(1);
 
         Timer::after(
-            300,
+            100,
             function () use ($channel, $connection, $chan) {
                 try {
                     $connection->unlisten($channel);
@@ -725,7 +753,7 @@ class ConnectionTest extends CoroTestCase
         );
 
         Timer::after(
-            100,
+            10,
             function () use ($channel, $connection) {
                 try {
                     $connection->query(sprintf("NOTIFY %s, '%s'", $channel, '0'));
@@ -739,7 +767,7 @@ class ConnectionTest extends CoroTestCase
         $chan = new Coroutine\Channel(1);
 
         Timer::after(
-            300,
+            100,
             function () use ($channel, $connection, $chan) {
                 try {
                     $connection->unlisten($channel);
@@ -788,7 +816,7 @@ class ConnectionTest extends CoroTestCase
         );
 
         Timer::after(
-            100,
+            10,
             function () use ($connection) {
                 try {
                     $connection->query('SELECT pg_terminate_backend(pg_backend_pid())');
@@ -826,7 +854,7 @@ class ConnectionTest extends CoroTestCase
         );
 
         Timer::after(
-            100,
+            10,
             function () use ($channel, $connection) {
                 try {
                     $connection->notify($channel, '0');
@@ -840,7 +868,7 @@ class ConnectionTest extends CoroTestCase
         $chan = new Coroutine\Channel(1);
 
         Timer::after(
-            300,
+            100,
             function () use ($channel, $connection, $chan) {
                 try {
                     $connection->unlisten($channel);
@@ -878,5 +906,20 @@ class ConnectionTest extends CoroTestCase
             function () {
             }
         );
+    }
+
+    public function testQueryAfterErroredQuery(): void
+    {
+        $connection = $this->getConnection();
+
+        try {
+            $result = $connection->query("INSERT INTO test (domain, tld) VALUES ('github', 'com')");
+        } catch (QueryExecutionError $exception) {
+            // Expected exception due to duplicate key.
+        }
+
+        $result = $connection->query("INSERT INTO test (domain, tld) VALUES ('gitlab', 'com')");
+
+        $this->assertSame(1, $result->getAffectedRowCount());
     }
 }

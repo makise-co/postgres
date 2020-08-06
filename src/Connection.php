@@ -85,14 +85,7 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     public function query(string $sql, float $timeout = 0)
     {
-        if (null === $this->handle) {
-            // connError is used for connection pooling feature
-            if ($this->connError) {
-                throw $this->connError;
-            }
-
-            throw new Exception\ConnectionException('Connection is closed');
-        }
+        $this->checkConnection();
 
         return $this->handle->query($sql, $timeout);
     }
@@ -102,14 +95,7 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     public function execute(string $sql, array $params = [], array $types = [], float $timeout = 0)
     {
-        if (null === $this->handle) {
-            // connError is used for connection pooling feature
-            if ($this->connError) {
-                throw $this->connError;
-            }
-
-            throw new Exception\ConnectionException('Connection is closed');
-        }
+        $this->checkConnection();
 
         return $this->handle->execute($sql, $params, $types, $timeout);
     }
@@ -119,14 +105,7 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     public function prepare(string $sql, ?string $name = null, array $types = [], float $timeout = 0): Statement
     {
-        if (null === $this->handle) {
-            // connError is used for connection pooling feature
-            if ($this->connError) {
-                throw $this->connError;
-            }
-
-            throw new Exception\ConnectionException('Connection is closed');
-        }
+        $this->checkConnection();
 
         return $this->handle->prepare($sql, $name, $types, $timeout);
     }
@@ -136,14 +115,7 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     public function listen(string $channel, ?Closure $callable, float $timeout = 0): ?Listener
     {
-        if (null === $this->handle) {
-            // connError is used for connection pooling feature
-            if ($this->connError) {
-                throw $this->connError;
-            }
-
-            throw new Exception\ConnectionException('Connection is closed');
-        }
+        $this->checkConnection();
 
         return $this->handle->listen($channel, $callable, $timeout);
     }
@@ -153,14 +125,7 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     public function notify(string $channel, string $payload, float $timeout = 0): CommandResult
     {
-        if (null === $this->handle) {
-            // connError is used for connection pooling feature
-            if ($this->connError) {
-                throw $this->connError;
-            }
-
-            throw new Exception\ConnectionException('Connection is closed');
-        }
+        $this->checkConnection();
 
         return $this->handle->notify($channel, $payload, $timeout);
     }
@@ -178,14 +143,7 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     public function unlisten(string $channel, float $timeout = 0): CommandResult
     {
-        if (null === $this->handle) {
-            // connError is used for connection pooling feature
-            if ($this->connError) {
-                throw $this->connError;
-            }
-
-            throw new Exception\ConnectionException('Connection is closed');
-        }
+        $this->checkConnection();
 
         return $this->handle->unlisten($channel, $timeout);
     }
@@ -195,14 +153,7 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     final public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
     {
-        if (null === $this->handle) {
-            // connError is used for connection pooling feature
-            if ($this->connError) {
-                throw $this->connError;
-            }
-
-            throw new Exception\ConnectionException('Connection is closed');
-        }
+        $this->checkConnection();
 
         return $this->handle->beginTransaction($isolation);
     }
@@ -212,14 +163,7 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     final public function quoteString(string $data): string
     {
-        if (null === $this->handle) {
-            // connError is used for connection pooling feature
-            if ($this->connError) {
-                throw $this->connError;
-            }
-
-            throw new Exception\ConnectionException('Connection is closed');
-        }
+        $this->checkConnection();
 
         return $this->handle->quoteString($data);
     }
@@ -229,6 +173,13 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     final public function quoteName(string $name): string
     {
+        $this->checkConnection();
+
+        return $this->handle->quoteName($name);
+    }
+
+    private function checkConnection(): void
+    {
         if (null === $this->handle) {
             // connError is used for connection pooling feature
             if ($this->connError) {
@@ -237,7 +188,5 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
 
             throw new Exception\ConnectionException('Connection is closed');
         }
-
-        return $this->handle->quoteName($name);
     }
 }
