@@ -879,4 +879,19 @@ class ConnectionTest extends CoroTestCase
             }
         );
     }
+
+    public function testQueryAfterErroredQuery(): void
+    {
+        $connection = $this->getConnection();
+
+        try {
+            $result = $connection->query("INSERT INTO test (domain, tld) VALUES ('github', 'com')");
+        } catch (QueryExecutionError $exception) {
+            // Expected exception due to duplicate key.
+        }
+
+        $result = $connection->query("INSERT INTO test (domain, tld) VALUES ('gitlab', 'com')");
+
+        $this->assertSame(1, $result->getAffectedRowCount());
+    }
 }

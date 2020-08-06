@@ -39,7 +39,13 @@ class BackgroundContext
     public function throwError(): void
     {
         if (null !== $this->errorClass) {
-            throw new $this->errorClass(...$this->errorParameters);
+            $errorClass = $this->errorClass;
+            $errorParameters = $this->errorParameters;
+
+            $this->errorClass = null;
+            $this->errorParameters = [];
+
+            throw new $errorClass(...$errorParameters);
         }
     }
 }

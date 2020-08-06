@@ -72,6 +72,8 @@ class QueryContext
      */
     public function free(): Result
     {
+        $this->busy = false;
+
         $this->throwError();
 
         if (null === $this->result) {
@@ -115,8 +117,6 @@ class QueryContext
 
     public function resume(): void
     {
-        $this->busy = false;
-
         Coroutine::resume($this->cid);
     }
 }
