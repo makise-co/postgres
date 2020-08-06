@@ -96,6 +96,47 @@ class ConnectionConfig
         return $this->dsn = implode(' ', $parts);
     }
 
+    public function getHost(): string
+    {
+        return $this->host;
+    }
+
+    public function getPort(): int
+    {
+        return $this->port;
+    }
+
+    public function getUser(): string
+    {
+        return $this->user;
+    }
+
+    public function getPassword(): ?string
+    {
+        return $this->password;
+    }
+
+    public function getDatabase(): ?string
+    {
+        return $this->database;
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
+
+    /**
+     * @return string
+     */
+    public function getDsn(): string
+    {
+        return $this->dsn;
+    }
+
     protected function escapeValue(string $value): string
     {
         if ('' === $value) {
