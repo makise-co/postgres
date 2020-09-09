@@ -19,14 +19,23 @@ class QueryExecutionError extends QueryError
 
     /**
      * QueryExecutionError constructor.
+     *
      * @param string $message
+     * @param int $code
      * @param array<string, mixed> $diagnostics
      * @param \Throwable|null $previous
      * @param string $query
      */
-    public function __construct(string $message, array $diagnostics, \Throwable $previous = null, string $query = '')
-    {
+    public function __construct(
+        string $message,
+        int $code,
+        array $diagnostics,
+        \Throwable $previous = null,
+        string $query = ''
+    ) {
         parent::__construct($message, $query, $previous);
+
+        $this->code = $code;
         $this->diagnostics = $diagnostics;
     }
 
