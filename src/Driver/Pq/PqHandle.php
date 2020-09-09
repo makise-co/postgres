@@ -490,7 +490,13 @@ class PqHandle implements Handle
             case pq\Result::FATAL_ERROR:
                 while ($this->handle->busy && $this->handle->getResult()) {
                 }
-                throw new Exception\QueryExecutionError($result->errorMessage, $result->diag, null, $sql ?? '');
+                throw new Exception\QueryExecutionError(
+                    $result->errorMessage,
+                    $result->status,
+                    $result->diag,
+                    null,
+                    $sql ?? ''
+                );
 
             case pq\Result::BAD_RESPONSE:
                 $this->close();
