@@ -11,151 +11,177 @@ declare(strict_types=1);
 namespace MakiseCo\Postgres;
 
 use Closure;
-use MakiseCo\Postgres\Exception;
-use MakiseCo\Postgres\Sql\ExecutorInterface;
-use MakiseCo\Postgres\Sql\QuoterInterface;
-use MakiseCo\Postgres\Sql\ReceiverInterface;
-use Throwable;
+use Error;
+use MakiseCo\Postgres\Contracts\Handle;
+use MakiseCo\Postgres\Contracts\Link;
+use MakiseCo\Postgres\Contracts\Listener;
+use MakiseCo\SqlCommon\Contracts\CommandResult;
+use MakiseCo\SqlCommon\Contracts\Statement;
+use MakiseCo\Postgres\Contracts\Transaction;
+use MakiseCo\Postgres\Util\Deferred;
 
-class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterface
+abstract class Connection implements Link, Handle
 {
-    private ConnectionConfig $config;
-    private ?PqHandle $handle = null;
-    private ?Throwable $connError = null;
+    protected Handle $handle;
 
-    public function __construct(ConnectionConfig $config)
+    /** Used to only allow one transaction at a time. */
+    private Deferred $busy;
+
+    /**
+     * @param ConnectionConfig $connectionConfig
+     * @return Connection
+     */
+    abstract public static function connect(ConnectionConfig $connectionConfig): Connection;
+
+    /**
+     * @param Handle $handle
+     */
+    public function __construct(Handle $handle)
     {
-        $this->config = $config;
+        $this->handle = $handle;
+//        $this->busy = new Deferred();
     }
 
     public function __destruct()
     {
-        $this->disconnect();
+        $this->handle->close();
     }
 
     /**
-     * @throws Exception\FailureException If the operation fails due to unexpected condition.
-     * @throws Exception\ConnectionException If the connection to the database is lost.
-     * @throws Exception\QueryError If the operation fails due to an error in the query (such as a syntax error).
+     * {@inheritdoc}
      */
-    public function connect(): void
+    final public function isAlive(): bool
     {
-        if ($this->isConnected()) {
-            return;
+        return $this->handle->isAlive();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    final public function getLastUsedAt(): int
+    {
+        return $this->handle->getLastUsedAt();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    final public function close(): void
+    {
+        $this->handle->close();
+    }
+
+    /**
+     * Wait for transaction complete
+     */
+    private function waitForTransaction(): void
+    {
+        while ($this->busy->isWaiting()) {
+            $this->busy->subscribe();
         }
-
-        $connector = new PqConnector($this->config);
-        try {
-            $pq = $connector->connect();
-        } catch (Throwable $e) {
-            $this->connError = $e;
-
-            throw $e;
-        }
-
-        $this->connError = null;
-        $this->handle = new PqHandle($pq);
-    }
-
-    public function disconnect(): void
-    {
-        if (!$this->isConnected()) {
-            return;
-        }
-
-        $this->connError = null;
-        $this->handle->disconnect();
     }
 
     /**
-     * @return bool
+     * Reserves the connection for a transaction.
      */
-    public function isConnected(): bool
+    private function reserve(): void
     {
-        return null !== $this->handle && $this->handle->isConnected();
-    }
-
-    public function getHandle(): ?PqHandle
-    {
-        return $this->handle;
+//        $this->busy->lock();
     }
 
     /**
-     * {@inheritDoc}
+     * Releases the transaction lock.
      */
-    public function query(string $sql, float $timeout = 0)
+    private function release(): void
     {
-        $this->checkConnection();
-
-        return $this->handle->query($sql, $timeout);
+//        $this->busy->unlock();
     }
 
     /**
-     * {@inheritDoc}
+     * {@inheritdoc}
      */
-    public function execute(string $sql, array $params = [], array $types = [], float $timeout = 0)
+    final public function query(string $sql)
     {
-        $this->checkConnection();
+//        $this->waitForTransaction();
 
-        return $this->handle->execute($sql, $params, $types, $timeout);
+        return $this->handle->query($sql);
     }
 
     /**
-     * {@inheritDoc}
+     * {@inheritdoc}
      */
-    public function prepare(string $sql, ?string $name = null, array $types = [], float $timeout = 0): Statement
+    final public function execute(string $sql, array $params = [])
     {
-        $this->checkConnection();
+//        $this->waitForTransaction();
 
-        return $this->handle->prepare($sql, $name, $types, $timeout);
+        return $this->handle->execute($sql, $params);
     }
 
     /**
-     * {@inheritDoc}
+     * {@inheritdoc}
      */
-    public function listen(string $channel, ?Closure $callable, float $timeout = 0): ?Listener
+    final public function prepare(string $sql): Statement
     {
-        $this->checkConnection();
+//        $this->waitForTransaction();
 
-        return $this->handle->listen($channel, $callable, $timeout);
+        return $this->handle->prepare($sql);
     }
 
     /**
-     * {@inheritDoc}
+     * {@inheritdoc}
      */
-    public function notify(string $channel, string $payload, float $timeout = 0): CommandResult
+    final public function notify(string $channel, string $payload = ""): CommandResult
     {
-        $this->checkConnection();
+//        $this->waitForTransaction();
 
-        return $this->handle->notify($channel, $payload, $timeout);
+        return $this->handle->notify($channel, $payload);
     }
 
     /**
-     * Unlistens from the channel. No more values will be emitted from this listener.
-     *
-     * @param string $channel Channel name.
-     * @param float $timeout Maximum allowed time (seconds) to wait results from database. (optional)
-     *
-     * @return CommandResult
-     *
-     * @throws Exception\FailureException If the operation fails due to unexpected condition.
-     * @throws Exception\ConnectionException If the connection to the database is lost.
+     * {@inheritdoc}
      */
-    public function unlisten(string $channel, float $timeout = 0): CommandResult
+    final public function listen(string $channel): Listener
     {
-        $this->checkConnection();
+//        $this->waitForTransaction();
 
-        return $this->handle->unlisten($channel, $timeout);
+        return $this->handle->listen($channel);
     }
 
     /**
-     * {@inheritDoc}
+     * {@inheritdoc}
      */
     final public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
     {
-        $this->checkConnection();
+//        $this->reserve();
 
-        return $this->handle->beginTransaction($isolation);
+//        try {
+            switch ($isolation) {
+                case Transaction::ISOLATION_UNCOMMITTED:
+                    $this->handle->query("BEGIN TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+                    break;
+
+                case Transaction::ISOLATION_COMMITTED:
+                    $this->handle->query("BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED");
+                    break;
+
+                case Transaction::ISOLATION_REPEATABLE:
+                    $this->handle->query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+                    break;
+
+                case Transaction::ISOLATION_SERIALIZABLE:
+                    $this->handle->query("BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+                    break;
+
+                default:
+                    throw new Error("Invalid transaction type");
+            }
+//        } catch (Throwable $exception) {
+//            $this->release();
+//
+//            throw $exception;
+//        }
+
+        return new ConnectionTransaction($this->handle, Closure::fromCallable([$this, 'release']), $isolation);
     }
 
     /**
@@ -163,8 +189,6 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     final public function quoteString(string $data): string
     {
-        $this->checkConnection();
-
         return $this->handle->quoteString($data);
     }
 
@@ -173,20 +197,7 @@ class Connection implements ExecutorInterface, ReceiverInterface, QuoterInterfac
      */
     final public function quoteName(string $name): string
     {
-        $this->checkConnection();
-
         return $this->handle->quoteName($name);
     }
-
-    private function checkConnection(): void
-    {
-        if (null === $this->handle) {
-            // connError is used for connection pooling feature
-            if ($this->connError) {
-                throw $this->connError;
-            }
-
-            throw new Exception\ConnectionException('Connection is closed');
-        }
-    }
 }
+

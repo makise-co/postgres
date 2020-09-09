@@ -10,24 +10,29 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Exception;
 
+use MakiseCo\SqlCommon\Exception\QueryError;
+
 class QueryExecutionError extends QueryError
 {
-    private string $query;
+    /** @var array<string, mixed>|mixed[] */
     private array $diagnostics;
 
-    public function __construct(string $message, string $query, array $diagnostics)
+    /**
+     * QueryExecutionError constructor.
+     * @param string $message
+     * @param array<string, mixed> $diagnostics
+     * @param \Throwable|null $previous
+     * @param string $query
+     */
+    public function __construct(string $message, array $diagnostics, \Throwable $previous = null, string $query = '')
     {
-        parent::__construct($message, 0, null);
-
-        $this->query = $query;
+        parent::__construct($message, $query, $previous);
         $this->diagnostics = $diagnostics;
     }
 
-    public function getQuery(): string
-    {
-        return $this->query;
-    }
-
+    /**
+     * @return array<string, mixed>|mixed[]
+     */
     public function getDiagnostics(): array
     {
         return $this->diagnostics;

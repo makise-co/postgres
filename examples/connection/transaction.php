@@ -8,10 +8,11 @@
 
 declare(strict_types=1);
 
-require \dirname(__DIR__) . '/../vendor/autoload.php';
+require dirname(__DIR__) . '/../vendor/autoload.php';
 
-use MakiseCo\Postgres\Connection;
 use MakiseCo\Postgres\ConnectionConfigBuilder;
+use MakiseCo\Postgres\Driver\Pq\PqConnection;
+use MakiseCo\SqlCommon\Contracts\ResultSet;
 
 use function Swoole\Coroutine\run;
 
@@ -25,8 +26,7 @@ run(
             ->withDatabase('makise')
             ->build();
 
-        $connection = new Connection($config);
-        $connection->connect();
+        $connection = PqConnection::connect($config);
 
         $connection->query('DROP TABLE IF EXISTS test');
 
@@ -40,7 +40,7 @@ run(
         $statement->execute(['google', 'com']);
         $statement->execute(['github', 'com']);
 
-        /** @var \MakiseCo\Postgres\ResultSet $result */
+        /** @var ResultSet $result */
         $result = $transaction->execute('SELECT * FROM test WHERE tld = :tld', ['tld' => 'com']);
 
         $format = "%-20s | %-10s\n";

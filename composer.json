@@ -19,16 +19,21 @@
     ],
     "minimum-stability": "dev",
     "prefer-stable": true,
+    "suggest": {
+        "ext-pq": "To work with Pq connection driver",
+        "ext-pgsql": "To work with PgSql connection driver",
+        "ext-swoole_postgres": "To work with SwoolePostgres connection driver"
+    },
     "require": {
         "php": ">=7.4",
         "ext-swoole": ">=4.4",
-        "ext-pq": "*",
-        "open-smf/connection-pool": "^1.0"
+        "makise-co/sql-common": "^1.0"
     },
     "require-dev": {
         "swoole/ide-helper": "^4.5",
         "phpunit/phpunit": "^9.1",
-        "symfony/var-dumper": "^5.0"
+        "symfony/var-dumper": "^5.0",
+        "phpstan/phpstan": "^0.12.40"
     },
     "autoload": {
         "psr-4": {

@@ -6,6 +6,8 @@
  * (c) Dmitry K. <coder1994@gmail.com>
  */
 
+declare(strict_types=1);
+
 namespace MakiseCo\Postgres;
 
 final class Notification
@@ -18,4 +20,11 @@ final class Notification
 
     /** @var string Message payload */
     public string $payload;
+
+    public function __construct(string $channel, int $pid, string $payload)
+    {
+        $this->channel = $channel;
+        $this->pid = $pid;
+        $this->payload = $payload;
+    }
 }

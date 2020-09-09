@@ -26,7 +26,7 @@ REGEX;
  * @param string $sql SQL statement with named and unnamed placeholders.
  * @param array $names [Output] Array of parameter positions mapped to names and/or indexed locations.
  *
- * @return string SQL statement with Postgres-style placeholders
+ * @return string SQL statement with src-style placeholders
  */
 function parseNamedParams(string $sql, ?array &$names): string
 {

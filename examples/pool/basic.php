@@ -10,11 +10,9 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/../vendor/autoload.php';
 
-use MakiseCo\Postgres\Connection;
 use MakiseCo\Postgres\ConnectionConfigBuilder;
-use MakiseCo\Postgres\ConnectionPool;
-use MakiseCo\Postgres\PoolConfig;
-use MakiseCo\Postgres\ResultSet;
+use MakiseCo\Postgres\PostgresPool;
+use MakiseCo\SqlCommon\Contracts\ResultSet;
 
 use function Swoole\Coroutine\run;
 
@@ -28,9 +26,9 @@ run(
             ->withDatabase('makise')
             ->build();
 
-        $poolConfig = new PoolConfig(0, 1);
-
-        $pool = new ConnectionPool($poolConfig, $connectionConfig);
+        $pool = new PostgresPool($connectionConfig);
+        $pool->setMaxActive(1);
+        $pool->setMinActive(0);
         $pool->init();
 
         /** @var ResultSet $result */
