@@ -12,7 +12,8 @@ require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 use MakiseCo\Postgres\Connection;
 use MakiseCo\Postgres\ConnectionConfigBuilder;
-use MakiseCo\Postgres\ResultSet;
+use MakiseCo\Postgres\Driver\Pq\PqConnection;
+use MakiseCo\SqlCommon\Contracts\ResultSet;
 
 function getRandomData(): Generator
 {
@@ -45,12 +46,11 @@ Swoole\Coroutine\run(function () {
         ->withUser('makise')
         ->withPassword('el-psy-congroo')
         ->withDatabase('makise')
-        ->withApplicationName('Makise Postgres Client Benchmark')
+        ->withApplicationName('Makise src Client Benchmark')
         ->withUnbuffered(false)
         ->build();
 
-    $connection = new Connection($config);
-    $connection->connect();
+    $connection = PqConnection::connect($config);
 
 //    seedData($connection);
 
@@ -66,7 +66,7 @@ Swoole\Coroutine\run(function () {
         }
     }
 
-    $stmt->close();
+    unset($stmt);
 
     $end = microtime(true);
 

@@ -35,12 +35,11 @@ class ConnectConfigBuilderTest extends TestCase
 
         $dsn = $config->__toString();
 
-        $this->assertSame(
+        self::assertSame(
             "host=postgres port=10228 user='makise' password='El-Psy-Congroo' dbname='cern'",
             $dsn
         );
     }
-
 
     /**
      * @depends testWithBasicParams
@@ -58,7 +57,7 @@ class ConnectConfigBuilderTest extends TestCase
 
         $dsn = $config->__toString();
 
-        $this->assertSame(
+        self::assertSame(
             "host=postgres port=10228 user='makise' password='El-Psy-Congroo' dbname='cern'",
             $dsn
         );
@@ -79,20 +78,20 @@ class ConnectConfigBuilderTest extends TestCase
             ->withSearchPath(['public'])
             ->withTimezone('UTC')
             ->withEncoding('utf8')
-            ->withApplicationName('Makise Postgres Client')
+            ->withApplicationName('Makise src Client')
             ->withConnectTimeout(1)
             ->withUnbuffered(false)
             ->withOption('sslmode', 'allow')
             ->build();
 
-        $this->assertFalse($config->getUnbuffered());
-        $this->assertSame(1.0, $config->getConnectTimeout());
+        self::assertFalse($config->getUnbuffered());
+        self::assertSame(1.0, $config->getConnectTimeout());
 
         $dsn = $config->__toString();
 
-        $this->assertSame(
+        self::assertSame(
             "host=postgres port=10228 user='makise' password='El-Psy-Congroo' dbname='cern' sslmode='allow'" .
-            " application_name='Makise Postgres Client' client_encoding='utf8' options='-csearch_path=public -ctimezone=UTC'",
+            " application_name='Makise src Client' client_encoding='utf8' options='-csearch_path=public -ctimezone=UTC'",
             $dsn
         );
     }
@@ -109,7 +108,7 @@ class ConnectConfigBuilderTest extends TestCase
                 'search_path' => ['public'],
                 'timezone' => 'UTC',
                 'encoding' => 'utf8',
-                'application_name' => 'Makise Postgres Client',
+                'application_name' => 'Makise src Client',
                 'connect_timeout' => 1.0,
                 'unbuffered' => false,
                 'options' => [
@@ -118,15 +117,31 @@ class ConnectConfigBuilderTest extends TestCase
             ]
         )->build();
 
-        $this->assertFalse($config->getUnbuffered());
-        $this->assertSame(1.0, $config->getConnectTimeout());
+        self::assertFalse($config->getUnbuffered());
+        self::assertSame(1.0, $config->getConnectTimeout());
 
         $dsn = $config->__toString();
 
-        $this->assertSame(
+        self::assertSame(
             "host=postgres port=10228 user='makise' password='El-Psy-Congroo' dbname='cern' sslmode='allow'" .
-            " application_name='Makise Postgres Client' client_encoding='utf8' options='-csearch_path=public -ctimezone=UTC'",
+            " application_name='Makise src Client' client_encoding='utf8' options='-csearch_path=public -ctimezone=UTC'",
             $dsn
         );
     }
+
+//    public function testFromString(): void
+//    {
+//        $config = $this->builder->fromString(
+//            "host=postgres port=10228 user=makise password='El-Psy-Congroo'" .
+//            " dbname=cern application_name='Makise src Client' client_encoding=utf8"
+//        )->build();
+//
+//        $dsn = $config->__toString();
+//
+//        self::assertSame(
+//            "host=postgres port=10228 user='makise' password='El-Psy-Congroo' dbname='cern'" .
+//            " application_name='Makise src Client' client_encoding='utf8'",
+//            $dsn
+//        );
+//    }
 }

@@ -10,16 +10,13 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres;
 
+use MakiseCo\Connection\ConnectionConfig as BaseConnectionConfig;
+
 use function addcslashes;
 use function implode;
 
-class ConnectionConfig
+class ConnectionConfig extends BaseConnectionConfig
 {
-    private string $host;
-    private int $port;
-    private string $user;
-    private ?string $password;
-    private ?string $database;
     private array $options;
     private float $connectTimeout;
     private bool $unbuffered;
@@ -47,13 +44,10 @@ class ConnectionConfig
         ?string $database = null,
         array $options = [],
         float $connectTimeout = 2,
-        bool $unbuffered = true
+        bool $unbuffered = false
     ) {
-        $this->host = $host;
-        $this->port = $port;
-        $this->user = $user;
-        $this->password = $password;
-        $this->database = $database;
+        parent::__construct($host, $port, $user, $password, $database);
+
         $this->options = $options;
         $this->connectTimeout = $connectTimeout;
         $this->unbuffered = $unbuffered;
@@ -76,17 +70,19 @@ class ConnectionConfig
         }
 
         $parts = [
-            'host=' . $this->host,
-            'port=' . $this->port,
-            'user=' . $this->escapeValue($this->user),
+            'host=' . $this->getHost(),
+            'port=' . $this->getPort(),
+            'user=' . $this->escapeValue($this->getUser()),
         ];
 
-        if ($this->password) {
-            $parts[] = 'password=' . $this->escapeValue($this->password);
+        $password = $this->getPassword();
+        if ($password) {
+            $parts[] = 'password=' . $this->escapeValue($password);
         }
 
-        if ($this->database) {
-            $parts[] = 'dbname=' . $this->escapeValue($this->database);
+        $database = $this->getDatabase();
+        if ($database) {
+            $parts[] = 'dbname=' . $this->escapeValue($database);
         }
 
         foreach ($this->options as $option => $value) {
@@ -94,31 +90,6 @@ class ConnectionConfig
         }
 
         return $this->dsn = implode(' ', $parts);
-    }
-
-    public function getHost(): string
-    {
-        return $this->host;
-    }
-
-    public function getPort(): int
-    {
-        return $this->port;
-    }
-
-    public function getUser(): string
-    {
-        return $this->user;
-    }
-
-    public function getPassword(): ?string
-    {
-        return $this->password;
-    }
-
-    public function getDatabase(): ?string
-    {
-        return $this->database;
     }
 
     /**
@@ -130,11 +101,11 @@ class ConnectionConfig
     }
 
     /**
-     * @return string
+     * @inheritDoc
      */
-    public function getDsn(): string
+    public function getConnectionString(): string
     {
-        return $this->dsn;
+        return $this->__toString();
     }
 
     protected function escapeValue(string $value): string

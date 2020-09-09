@@ -29,7 +29,7 @@ class ConnectionConfigBuilder
     private ?string $encoding = null;
     private array $searchPath = [];
     private float $connectTimeout = 0;
-    private bool $unbuffered = true;
+    private bool $unbuffered = false;
     private array $options = [];
 
     /**

@@ -22,7 +22,7 @@ class ArrayParserTest extends TestCase
 
     public function setUp(): void
     {
-        $this->parser = new ArrayParser;
+        $this->parser = new ArrayParser();
     }
 
     public function testSingleDimensionalArray(): void
@@ -30,7 +30,7 @@ class ArrayParserTest extends TestCase
         $array = ["one", "two", "three"];
         $string = '{' . implode(',', $array) . '}';
 
-        $this->assertSame($array, $this->parser->parse($string));
+        self::assertSame($array, $this->parser->parse($string));
     }
 
     public function testMultiDimensionalArray(): void
@@ -38,7 +38,7 @@ class ArrayParserTest extends TestCase
         $array = ["one", "two", ["three", "four"], "five"];
         $string = '{one, two, {three, four}, five}';
 
-        $this->assertSame($array, $this->parser->parse($string));
+        self::assertSame($array, $this->parser->parse($string));
     }
 
     public function testQuotedStrings(): void
@@ -46,7 +46,7 @@ class ArrayParserTest extends TestCase
         $array = ["one", "two", ["three", "four"], "five"];
         $string = '{"one", "two", {"three", "four"}, "five"}';
 
-        $this->assertSame($array, $this->parser->parse($string));
+        self::assertSame($array, $this->parser->parse($string));
     }
 
     public function testAlternateDelimiter(): void
@@ -54,7 +54,7 @@ class ArrayParserTest extends TestCase
         $array = ["1,2,3", "3,4,5"];
         $string = '{1,2,3;3,4,5}';
 
-        $this->assertSame($array, $this->parser->parse($string, null, ';'));
+        self::assertSame($array, $this->parser->parse($string, null, ';'));
     }
 
     public function testEscapedQuoteDelimiter(): void
@@ -62,7 +62,7 @@ class ArrayParserTest extends TestCase
         $array = ['va"lue1', 'value"2'];
         $string = '{"va\\"lue1", "value\\"2"}';
 
-        $this->assertSame($array, $this->parser->parse($string, null, ','));
+        self::assertSame($array, $this->parser->parse($string, null, ','));
     }
 
     public function testNullValue(): void
@@ -70,7 +70,7 @@ class ArrayParserTest extends TestCase
         $array = ["one", null, "three"];
         $string = '{one, NULL, three}';
 
-        $this->assertSame($array, $this->parser->parse($string));
+        self::assertSame($array, $this->parser->parse($string));
     }
 
     public function testQuotedNullValue(): void
@@ -78,7 +78,7 @@ class ArrayParserTest extends TestCase
         $array = ["one", "NULL", "three"];
         $string = '{one, "NULL", three}';
 
-        $this->assertSame($array, $this->parser->parse($string));
+        self::assertSame($array, $this->parser->parse($string));
     }
 
     public function testCast(): void
@@ -86,11 +86,11 @@ class ArrayParserTest extends TestCase
         $array = [1, 2, 3];
         $string = '{' . implode(',', $array) . '}';
 
-        $cast = function (string $value): int {
-            return (int)$value;
+        $cast = static function (string $value): int {
+            return (int) $value;
         };
 
-        $this->assertSame($array, $this->parser->parse($string, $cast));
+        self::assertSame($array, $this->parser->parse($string, $cast));
     }
 
     public function testCastWithNull(): void
@@ -98,11 +98,11 @@ class ArrayParserTest extends TestCase
         $array = [1, 2, null, 3];
         $string = '{1,2,NULL,3}';
 
-        $cast = function (string $value): int {
-            return (int)$value;
+        $cast = static function (string $value): int {
+            return (int) $value;
         };
 
-        $this->assertSame($array, $this->parser->parse($string, $cast));
+        self::assertSame($array, $this->parser->parse($string, $cast));
     }
 
     public function testCastWithMultidimensionalArray(): void
@@ -110,11 +110,11 @@ class ArrayParserTest extends TestCase
         $array = [1, 2, [3, 4], [5], 6, 7, [[8, 9], 10]];
         $string = '{1,2,{3,4},{5},6,7,{{8,9},10}}';
 
-        $cast = function (string $value): int {
-            return (int)$value;
+        $cast = static function (string $value): int {
+            return (int) $value;
         };
 
-        $this->assertSame($array, $this->parser->parse($string, $cast));
+        self::assertSame($array, $this->parser->parse($string, $cast));
     }
 
     public function testRandomWhitespace(): void
@@ -122,11 +122,11 @@ class ArrayParserTest extends TestCase
         $array = [1, 2, [3, 4], [5], 6, 7, [[8, 9], 10]];
         $string = " {1, 2, { 3 ,\r 4 },{ 5} \n\t ,6 , 7, { {8,\t 9}, 10} }  \n";
 
-        $cast = function (string $value): int {
-            return (int)$value;
+        $cast = static function (string $value): int {
+            return (int) $value;
         };
 
-        $this->assertSame($array, $this->parser->parse($string, $cast));
+        self::assertSame($array, $this->parser->parse($string, $cast));
     }
 
     public function testEscapedBackslashesInQuotedValue(): void
@@ -134,7 +134,7 @@ class ArrayParserTest extends TestCase
         $array = ["test\\ing", "esca\\ped\\"];
         $string = '{"test\\\\ing", "esca\\\\ped\\\\"}';
 
-        $this->assertSame($array, $this->parser->parse($string));
+        self::assertSame($array, $this->parser->parse($string));
     }
 
     public function testEmptyArray(): void
@@ -142,7 +142,7 @@ class ArrayParserTest extends TestCase
         $array = [];
         $string = '{}';
 
-        $this->assertSame($array, $this->parser->parse($string));
+        self::assertSame($array, $this->parser->parse($string));
     }
 
     public function testArrayContainingEmptyArray(): void
@@ -150,11 +150,11 @@ class ArrayParserTest extends TestCase
         $array = [[], [1], []];
         $string = '{{},{1},{}}';
 
-        $cast = function (string $value): int {
-            return (int)$value;
+        $cast = static function (string $value): int {
+            return (int) $value;
         };
 
-        $this->assertSame($array, $this->parser->parse($string, $cast));
+        self::assertSame($array, $this->parser->parse($string, $cast));
     }
 
     public function testArrayWithEmptyString(): void
@@ -162,7 +162,7 @@ class ArrayParserTest extends TestCase
         $array = [''];
         $string = '{""}';
 
-        $this->assertSame($array, $this->parser->parse($string));
+        self::assertSame($array, $this->parser->parse($string));
     }
 
     public function testMalformedNestedArray(): void

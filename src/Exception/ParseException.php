@@ -10,9 +10,13 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Exception;
 
-use Error;
+use MakiseCo\SqlCommon\Exception\FailureException;
 
-class ParseException extends Error
+class ParseException extends FailureException
 {
-
+    public function __construct(string $message = '')
+    {
+        $message = "Parse error while splitting array" . (($message === '') ? '' : ": " . $message);
+        parent::__construct($message);
+    }
 }

@@ -10,11 +10,8 @@ declare(strict_types=1);
 
 require \dirname(__DIR__) . '/../vendor/autoload.php';
 
-use MakiseCo\Postgres\Connection;
 use MakiseCo\Postgres\ConnectionConfigBuilder;
-
-use MakiseCo\Postgres\ConnectionPool;
-use MakiseCo\Postgres\PoolConfig;
+use MakiseCo\Postgres\PostgresPool;
 
 use function Swoole\Coroutine\run;
 
@@ -28,9 +25,9 @@ run(
             ->withDatabase('makise')
             ->build();
 
-        $poolConfig = new PoolConfig(0, 1);
-
-        $pool = new ConnectionPool($poolConfig, $connectionConfig);
+        $pool = new PostgresPool($connectionConfig);
+        $pool->setMaxActive(1);
+        $pool->setMinActive(0);
         $pool->init();
 
         $pool->query('DROP TABLE IF EXISTS test');
@@ -45,7 +42,7 @@ run(
         $statement->execute(['google', 'com']);
         $statement->execute(['github', 'com']);
 
-        /** @var \MakiseCo\Postgres\ResultSet $result */
+        /** @var \MakiseCo\SqlCommon\Contracts\ResultSet $result */
         $result = $transaction->execute('SELECT * FROM test WHERE tld = :tld', ['tld' => 'com']);
 
         $format = "%-20s | %-10s\n";

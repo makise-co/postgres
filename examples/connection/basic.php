@@ -10,9 +10,9 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/../vendor/autoload.php';
 
-use MakiseCo\Postgres\Connection;
 use MakiseCo\Postgres\ConnectionConfigBuilder;
-use MakiseCo\Postgres\ResultSet;
+use MakiseCo\Postgres\Driver\Pq\PqConnection;
+use MakiseCo\SqlCommon\Contracts\ResultSet;
 
 use function Swoole\Coroutine\run;
 
@@ -26,8 +26,7 @@ run(
             ->withDatabase('makise')
             ->build();
 
-        $connection = new Connection($config);
-        $connection->connect();
+        $connection = PqConnection::connect($config);
 
         /** @var ResultSet $result */
         $result = $connection->query('SHOW ALL');

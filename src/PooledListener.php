@@ -11,68 +11,82 @@ declare(strict_types=1);
 namespace MakiseCo\Postgres;
 
 use Closure;
-use MakiseCo\Postgres\Sql\ListenerInterface;
-use Throwable;
+use MakiseCo\Postgres\Contracts\Listener;
+use MakiseCo\SqlCommon\Exception\FailureException;
 
-class PooledListener implements ListenerInterface
+class PooledListener implements Listener
 {
     private Listener $listener;
-    private ?Closure $release = null;
+    private ?Closure $release;
 
     public function __construct(Listener $listener, Closure $release)
     {
-        $this->listener = $listener;
-
         if (!$listener->isListening()) {
             $release();
-        } else {
-            $this->release = $release;
+
+            throw new FailureException('Listener is dead');
         }
+
+        $this->listener = $listener;
+        $this->release = $release;
     }
 
     public function __destruct()
     {
-        $this->unlisten();
+        if ($this->listener->isListening()) {
+            $this->unlisten();
+
+            return;
+        }
+
+        // if listener was closed directly in connection lets call release
+        if ($this->release !== null) {
+            $release = $this->release;
+            $this->release = null;
+            $release();
+        }
     }
 
-    public function getNotification(float $timeout = 0): ?Notification
+    /**
+     * @inheritDoc
+     */
+    public function getNotification(): ?Notification
     {
-        return $this->listener->getNotification($timeout);
+        return $this->listener->getNotification();
     }
 
+    /**
+     * @inheritDoc
+     */
     public function getChannel(): string
     {
         return $this->listener->getChannel();
     }
 
+    /**
+     * @inheritDoc
+     */
     public function isListening(): bool
     {
         return $this->listener->isListening();
     }
 
+    /**
+     * @inheritDoc
+     */
     public function unlisten(): void
     {
-        if (!$this->release) {
-            return;
-        }
-
-        $err = null;
-
-        if ($this->listener->isListening()) {
-            try {
-                $this->listener->unlisten();
-            } catch (Throwable $e) {
-                $err = $e;
-            }
+        if ($this->release === null) {
+            throw new \Error("Already unlistened on this channel");
         }
 
         $release = $this->release;
         $this->release = null;
 
-        $release();
-
-        if ($err) {
-            throw $err;
+        try {
+            $this->listener->unlisten();
+        } finally {
+            $release();
         }
     }
 }

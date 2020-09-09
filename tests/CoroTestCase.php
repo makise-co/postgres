@@ -10,37 +10,53 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Tests;
 
+use Closure;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\TestResult;
 use Swoole\Coroutine;
+use Swoole\Event;
 use Swoole\Timer;
 use Throwable;
 
-class CoroTestCase extends TestCase
+use function Swoole\Coroutine\run;
+
+abstract class CoroTestCase extends TestCase
 {
     public function run(TestResult $result = null): TestResult
     {
-        $res = null;
-        $ex = null;
+        $coroResult = new CoroutineTestResult();
 
-        Coroutine::set(['log_level' => SWOOLE_LOG_INFO]);
+        run(
+            Closure::fromCallable([$this, 'execCoro']),
+            $result,
+            $coroResult
+        );
 
-        Coroutine\run(
-            function () use (&$res, &$ex, $result) {
-                try {
-                    $res = parent::run($result);
-                } catch (Throwable $e) {
-                    $ex = $e;
+        if (null !== $coroResult->ex) {
+            throw $coroResult->ex;
+        }
+
+        return $coroResult->result;
+    }
+
+    private function execCoro(?TestResult $result, CoroutineTestResult $coroTestResult): void
+    {
+        Coroutine::defer(
+            static function () {
+                // do not block command coroutine exit if programmer have forgotten to release event loop
+                if (Coroutine::stats()['event_num'] > 0) {
+                    // force exit event loop
+                    Event::exit();
                 }
 
                 Timer::clearAll();
             }
         );
 
-        if (null !== $ex) {
-            throw $ex;
+        try {
+            $coroTestResult->result = parent::run($result);
+        } catch (Throwable $e) {
+            $coroTestResult->ex = $e;
         }
-
-        return $res;
     }
 }
