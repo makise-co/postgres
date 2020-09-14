@@ -16,9 +16,9 @@ use MakiseCo\Postgres\Driver\Pq\PqConnector;
 use MakiseCo\Postgres\PostgresPool;
 
 /**
- * @requires extension pq
+ * @requires extension pgsql
  */
-class PqPoolTest extends AbstractLinkTest
+class PgSqlPoolTest extends AbstractLinkTest
 {
     private const POOL_SIZE = 3;
 

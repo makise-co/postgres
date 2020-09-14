@@ -15,7 +15,26 @@ composer require makise-co/postgres
 
 - PHP 7.4+
 - Swoole 4.4+
-- [pecl-pq](https://pecl.php.net/package/pq)
+- [ext-pq](https://pecl.php.net/package/pq) for `PqConnection`
+- ext-pgsql for `PgSqlConnection`
+
+## Supported underlying drivers
+
+| Driver          	| Try 1    	| Try 2    	| Try 3    	| Sum      	| Performance vs PDO 	|
+|-----------------	|----------	|----------	|----------	|----------	|--------------------	|
+| PDO PGSQL       	| 0.631116 	| 0.629111 	| 0.639473 	| 1.899700 	| -                  	|
+| Pq (buffered)   	| 0.696158 	| 0.708033 	| 0.703638 	| 2.107829 	| -9.8741%           	|
+| Pq (unbuffered) 	| 1.517776 	| 1.289702 	| 1.355651 	| 4.163129 	| -54.3685%          	|
+| PgSql           	| 0.918096 	| 0.918936 	| 0.918936 	| 2.755968 	| -31.0696%          	|
+| Swoole* (raw)    	| 0.600656 	| 0.553807 	| 0.594692 	| 1.749155 	| +8.6067%           	|
+
+The asterisk mark means that the driver is not implemented yet.
+
+\* The PgSql driver has a poor performance (at least 20% slower than PDO)
+
+## Benchmarks
+All benchmarks can be found in the [`benchmark`](benchmark) directory.
+
 
 ## Documentation & Examples
 
@@ -29,8 +48,9 @@ More examples can be found in the [`examples`](examples) directory.
 declare(strict_types=1);
 
 use MakiseCo\Postgres\ConnectionConfigBuilder;
-use MakiseCo\Postgres\Connection;
-use MakiseCo\Postgres\ResultSet;
+use MakiseCo\Postgres\Driver\Pq\PqConnection;
+use MakiseCo\Postgres\Driver\PgSql\PgSqlConnection;
+use MakiseCo\SqlCommon\Contracts\ResultSet;
 
 use function Swoole\Coroutine\run;
 
@@ -53,8 +73,9 @@ run(static function () {
         ])
         ->build();
 
-    $connection = new Connection($config);
-    $connection->connect();
+    $connection = PqConnection::connect($config);
+    // or
+    $connection = PgSqlConnection::connect($config);
 
     $statement = $connection->prepare("SELECT * FROM test WHERE id = :id");
 
