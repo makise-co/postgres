@@ -19,6 +19,12 @@ composer require makise-co/postgres
 - ext-pgsql for `PgSqlConnection`
 
 ## Supported underlying drivers
+* Pq based on ext-pq
+* PgSql based on ext-pgsql
+
+\* The PgSql driver has a poor performance (at least 20% slower than PDO)
+
+## Benchmarks
 
 | Driver          	| Try 1    	| Try 2    	| Try 3    	| Sum      	| Performance vs PDO 	|
 |-----------------	|----------	|----------	|----------	|----------	|--------------------	|
@@ -30,9 +36,6 @@ composer require makise-co/postgres
 
 The asterisk mark means that the driver is not implemented yet.
 
-\* The PgSql driver has a poor performance (at least 20% slower than PDO)
-
-## Benchmarks
 All benchmarks can be found in the [`benchmark`](benchmark) directory.
 
 
