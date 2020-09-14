@@ -14,11 +14,14 @@ use Closure;
 use MakiseCo\Connection\ConnectorInterface;
 use MakiseCo\Postgres\Contracts\Link;
 use MakiseCo\Postgres\Contracts\Listener;
+use MakiseCo\Postgres\Driver\PgSql\PgSqlConnector;
 use MakiseCo\Postgres\Driver\Pq\PqConnector;
 use MakiseCo\SqlCommon\Contracts\CommandResult;
 use MakiseCo\Postgres\Contracts\Transaction;
 use MakiseCo\SqlCommon\Contracts\Transaction as SqlTransaction;
 use MakiseCo\SqlCommon\DatabasePool;
+
+use function extension_loaded;
 
 class PostgresPool extends DatabasePool implements Link
 {
@@ -77,7 +80,15 @@ class PostgresPool extends DatabasePool implements Link
 
     protected function createDefaultConnector(): ConnectorInterface
     {
-        return new PqConnector();
+        if (extension_loaded('pq')) {
+            return new PqConnector();
+        }
+
+        if (extension_loaded('pgsql')) {
+            return new PgSqlConnector();
+        }
+
+        throw new \RuntimeException('Please install pq or pgsql extension');
     }
 
     /**

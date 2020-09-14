@@ -9,20 +9,9 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
+require_once 'random_data.php';
 
-use MakiseCo\Postgres\ConnectionConfigBuilder;
-
-function getRandomData(): Generator
-{
-    for ($i = 0; $i < 10000; $i++) {
-        yield [
-            md5((string)random_int(100000, 900000)),
-            md5((string)random_int(100000, 900000))
-        ];
-    }
-}
-
-function seedData(\Swoole\Coroutine\PostgreSQL $connection): void
+function seedDataSwoole(\Swoole\Coroutine\PostgreSQL $connection): void
 {
     $connection->query("DROP TABLE IF EXISTS test");
     $connection->query("CREATE TABLE test (domain VARCHAR(63), tld VARCHAR(63), PRIMARY KEY (domain, tld))");
@@ -37,27 +26,17 @@ function seedData(\Swoole\Coroutine\PostgreSQL $connection): void
 }
 
 Swoole\Coroutine\run(function () {
-    $config = (new ConnectionConfigBuilder())
-        ->withHost('127.0.0.1')
-        ->withPort(5433)
-        ->withUser('makise')
-        ->withPassword('el-psy-congroo')
-        ->withDatabase('makise')
-        ->withApplicationName('Makise Postgres Client Benchmark')
-        ->withUnbuffered(true)
-        ->build();
-
     $connection = new \Swoole\Coroutine\PostgreSQL();
-    $connection->connect($config->__toString());
+    $connection->connect("host=127.0.0.1 port=5434 user=makise password=el-psy-congroo dbname=makise");
 
-//    seedData($connection);
+//    seedDataSwoole($connection);
 
     $start = microtime(true);
 
-    for ($i = 0; $i < 500; $i++) {
+    for ($i = 0; $i < 100; $i++) {
         $result = $connection->query('SELECT * FROM test');
 
-        while (false !== ($row = $connection->fetchAssoc($result))) {
+        while ($row = $connection->fetchAssoc($result)) {
         }
     }
 
@@ -65,6 +44,6 @@ Swoole\Coroutine\run(function () {
 
     $total = $end - $start;
 
-    printf("Execution time for Swoole client: %.2f secs\n", $total);
+    printf("Execution time for Swoole client: %f secs\n", $total);
     printf("Peak memory usage for Swoole client: %.2f kb\n", memory_get_peak_usage() / 1024);
 });

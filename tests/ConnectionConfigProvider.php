@@ -23,8 +23,8 @@ class ConnectionConfigProvider
         }
 
         return self::$config = new ConnectionConfig(
-            'host.docker.internal',
-            5432,
+            '127.0.0.1',
+            5434,
             'makise',
             'el-psy-congroo',
             'makise',
@@ -33,6 +33,6 @@ class ConnectionConfigProvider
 
     public static function getString(): string
     {
-        return 'host=host.docker.internal user=makise password=el-psy-congroo dbname=makise';
+        return 'host=127.0.0.1 port=5434 user=makise password=el-psy-congroo dbname=makise';
     }
 }
