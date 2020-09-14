@@ -33,6 +33,8 @@ composer require makise-co/postgres
 | Pq (unbuffered) 	| 1.517776 	| 1.289702 	| 1.355651 	| 4.163129 	| -54.3685%          	|
 | PgSql           	| 0.918096 	| 0.918936 	| 0.918936 	| 2.755968 	| -31.0696%          	|
 | Swoole* (raw)    	| 0.600656 	| 0.553807 	| 0.594692 	| 1.749155 	| +8.6067%           	|
+| Pq (raw)        	| 0.626909 	| 0.632697 	| 0.629343 	| 1.888949 	| +0.5692%           	|
+| PgSql (raw)     	| 0.561219 	| 0.561540 	| 0.571930 	| 1.694689 	| +12.0973%          	|
 
 The asterisk mark means that the driver is not implemented yet.
 
