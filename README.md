@@ -38,6 +38,8 @@ composer require makise-co/postgres
 
 The asterisk mark means that the driver is not implemented yet.
 
+\* The PgSql (raw) is so fast in this benchmark because there is no code to convert results to native PHP types.
+
 All benchmarks can be found in the [`benchmark`](benchmark) directory.
 
 
