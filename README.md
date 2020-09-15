@@ -21,13 +21,11 @@ composer require makise-co/postgres
 
 ## Supported underlying drivers
 
-| Driver 	| Buffered Mode 	| Unbuffered Mode 	| Listen 	|
-|--------	|---------------	|-----------------	|--------	|
-| Pq     	| Yes           	| Yes             	| Yes    	|
-| PgSql  	| Yes           	| No              	| Yes    	|
-| Swoole 	| Yes           	| No              	| No     	|
-
-\* The PgSql driver has a poor performance (at least 20% slower than PDO)
+| Driver 	| Buffered Mode 	| Unbuffered Mode 	| Listen 	| Postgres Arrays Convertation 	|
+|--------	|---------------	|-----------------	|--------	|------------------------------	|
+| Pq     	| Yes           	| Yes             	| Yes    	| Yes                          	|
+| PgSql  	| Yes           	| No              	| Yes    	| Yes                          	|
+| Swoole 	| Yes           	| No              	| No     	| No                           	|
 
 ## Benchmarks
 
@@ -44,7 +42,7 @@ composer require makise-co/postgres
 
 \* (raw) means that is raw driver benchmark (without any abstractions and PHP code execution).
 
-\* The PgSql (raw) is much faster in this benchmark because there is no code to convert results to native PHP types.
+\* The PgSql (raw) is much faster than Pgsql in this benchmark because there is no code to convert results to native PHP types.
 
 All benchmarks can be found in the [`benchmark`](benchmark) directory.
 
