@@ -40,7 +40,7 @@ composer require makise-co/postgres
 | Pq (raw)        	| 0.643230 	| 0.645116 	| 0.656374 	| 1.944720 	| -8.4668%           	|
 | PgSql (raw)     	| 0.576180 	| 0.583124 	| 0.577715 	| 1.737019 	| +2.4782%           	|
 
-\* (raw) means that is raw driver benchmark (without any abstractions and PHP code execution).
+\* (raw) means that is a benchmark without any abstractions and PHP code execution.
 
 \* The PgSql (raw) is much faster than Pgsql in this benchmark because there is no code to convert results to native PHP types.
 
