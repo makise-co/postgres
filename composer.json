@@ -22,7 +22,7 @@
     "suggest": {
         "ext-pq": "To work with Pq connection driver",
         "ext-pgsql": "To work with PgSql connection driver",
-        "ext-swoole_postgres": "To work with SwoolePostgres connection driver"
+        "ext-swoole_postgres": "To work with Swoole connection driver"
     },
     "require": {
         "php": ">=7.4",

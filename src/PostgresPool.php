@@ -16,6 +16,7 @@ use MakiseCo\Postgres\Contracts\Link;
 use MakiseCo\Postgres\Contracts\Listener;
 use MakiseCo\Postgres\Driver\PgSql\PgSqlConnector;
 use MakiseCo\Postgres\Driver\Pq\PqConnector;
+use MakiseCo\Postgres\Driver\Swoole\SwooleConnector;
 use MakiseCo\SqlCommon\Contracts\CommandResult;
 use MakiseCo\Postgres\Contracts\Transaction;
 use MakiseCo\SqlCommon\Contracts\Transaction as SqlTransaction;
@@ -80,6 +81,10 @@ class PostgresPool extends DatabasePool implements Link
 
     protected function createDefaultConnector(): ConnectorInterface
     {
+        if (extension_loaded('swoole_postgresql')) {
+            return new SwooleConnector();
+        }
+
         if (extension_loaded('pq')) {
             return new PqConnector();
         }

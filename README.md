@@ -17,28 +17,32 @@ composer require makise-co/postgres
 - Swoole 4.4+
 - [ext-pq](https://pecl.php.net/package/pq) for `PqConnection`
 - ext-pgsql for `PgSqlConnection`
+- [ext-swoole_postgresql](https://github.com/swoole/ext-postgresql) for `SwooleConnection`
 
 ## Supported underlying drivers
-* Pq based on ext-pq
-* PgSql based on ext-pgsql
 
-\* The PgSql driver has a poor performance (at least 20% slower than PDO)
+| Driver 	| Buffered Mode 	| Unbuffered Mode 	| Listen 	| Postgres Arrays Convertation 	|
+|--------	|---------------	|-----------------	|--------	|------------------------------	|
+| Pq     	| Yes           	| Yes             	| Yes    	| Yes                          	|
+| PgSql  	| Yes           	| No              	| Yes    	| Yes                          	|
+| Swoole 	| Yes           	| No              	| No     	| No                           	|
 
 ## Benchmarks
 
 | Driver          	| Try 1    	| Try 2    	| Try 3    	| Sum      	| Performance vs PDO 	|
 |-----------------	|----------	|----------	|----------	|----------	|--------------------	|
-| PDO PGSQL       	| 0.631116 	| 0.629111 	| 0.639473 	| 1.899700 	| -                  	|
-| Pq (buffered)   	| 0.696158 	| 0.708033 	| 0.703638 	| 2.107829 	| -9.8741%           	|
-| Pq (unbuffered) 	| 1.517776 	| 1.289702 	| 1.355651 	| 4.163129 	| -54.3685%          	|
-| PgSql           	| 0.918096 	| 0.918936 	| 0.918936 	| 2.755968 	| -31.0696%          	|
-| Swoole* (raw)    	| 0.600656 	| 0.553807 	| 0.594692 	| 1.749155 	| +8.6067%           	|
-| Pq (raw)        	| 0.626909 	| 0.632697 	| 0.629343 	| 1.888949 	| +0.5692%           	|
-| PgSql (raw)     	| 0.561219 	| 0.561540 	| 0.571930 	| 1.694689 	| +12.0973%          	|
+| PDO PGSQL (raw)  	| 0.594816 	| 0.588032 	| 0.597217 	| 1.780065 	| -                  	|
+| Pq (buffered)   	| 0.670369 	| 0.679673 	| 0.691890 	| 2.041932 	| -12.8245%          	|
+| Pq (unbuffered) 	| 1.202617 	| 1.248877 	| 1.204900 	| 3.656394 	| -51.3164%          	|
+| PgSql           	| 0.888312 	| 0.886494 	| 0.890477 	| 2.665283 	| -33.2129%          	|
+| Swoole          	| 0.656156 	| 0.654318 	| 0.667154 	| 1.977628 	| -9.9899%           	|
+| Swoole (raw)    	| 0.576667 	| 0.589855 	| 0.578105 	| 1.744627 	| +2.0313%           	|
+| Pq (raw)        	| 0.643230 	| 0.645116 	| 0.656374 	| 1.944720 	| -8.4668%           	|
+| PgSql (raw)     	| 0.576180 	| 0.583124 	| 0.577715 	| 1.737019 	| +2.4782%           	|
 
-The asterisk mark means that the driver is not implemented yet.
+\* (raw) means that is raw driver benchmark (without any abstractions and PHP code execution).
 
-\* The PgSql (raw) is so fast in this benchmark because there is no code to convert results to native PHP types.
+\* The PgSql (raw) is much faster than Pgsql in this benchmark because there is no code to convert results to native PHP types.
 
 All benchmarks can be found in the [`benchmark`](benchmark) directory.
 
@@ -54,9 +58,11 @@ More examples can be found in the [`examples`](examples) directory.
 
 declare(strict_types=1);
 
+use MakiseCo\Postgres\ConnectionConfig;
 use MakiseCo\Postgres\ConnectionConfigBuilder;
 use MakiseCo\Postgres\Driver\Pq\PqConnection;
 use MakiseCo\Postgres\Driver\PgSql\PgSqlConnection;
+use MakiseCo\Postgres\Driver\Swoole\SwooleConnection;
 use MakiseCo\SqlCommon\Contracts\ResultSet;
 
 use function Swoole\Coroutine\run;
@@ -68,6 +74,12 @@ run(static function () {
         ->withUser('makise')
         ->withPassword('el-psy-congroo')
         ->withDatabase('cern')
+        ->withSslMode('prefer')
+        ->withEncoding('utf-8')
+        ->withApplicationName('Makise Postgres Driver')
+        ->withSearchPath(['public'])
+        ->withTimezone('UTC')
+        ->withConnectTimeout(1.0) // wait 1 second
         ->build();
     // or:
     $config = (new ConnectionConfigBuilder())
@@ -77,12 +89,41 @@ run(static function () {
             'user' => 'makise',
             'password' => 'el-psy-congroo',
             'database' => 'cern',
+            'sslmode' => 'prefer',
+            'client_encoding' => 'utf-8',
+            // or
+            'encoding' => 'utf-8',
+            // or
+            'charset' => 'utf-8',
+            'application_name' => 'Makise Postgres Driver',
+            'search_path' => 'public', // array of strings can be passed
+            // or
+            'schema' => 'public', // array of strings can be passed
+            'timezone' => 'UTC',
+            'connect_timeout' => 1.0,
         ])
         ->build();
+    // or
+    $config = new ConnectionConfig(
+        '127.0.0.1',
+        5432,
+        'makise',
+        'el-psy-congroo',
+        'makise',
+        [
+            'sslmode' => 'prefer',
+            'client_encoding' => 'utf-8',
+            'application_name' => 'Makise Postgres Driver',
+            'options' => '-csearch_path=public -ctimezone=UTC',
+        ],
+        1.0,
+    );
 
     $connection = PqConnection::connect($config);
     // or
     $connection = PgSqlConnection::connect($config);
+    // or
+    $connection = SwooleConnection::connect($config);
 
     $statement = $connection->prepare("SELECT * FROM test WHERE id = :id");
 

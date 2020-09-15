@@ -10,13 +10,44 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres;
 
+use InvalidArgumentException;
 use MakiseCo\Connection\ConnectionConfig as BaseConnectionConfig;
 
 use function addcslashes;
+use function array_key_exists;
 use function implode;
+use function in_array;
 
 class ConnectionConfig extends BaseConnectionConfig
 {
+    public const SSL_MODES = [
+        'disable',
+        'allow',
+        'prefer',
+        'require',
+        'verify-ca',
+        'verify-full',
+    ];
+
+    public const GSS_MODES = [
+        'disable',
+        'prefer',
+        'require',
+    ];
+
+    public const REPLICATION_MODES = [
+        'true',
+        'on',
+        'yes',
+        '1',
+        'database',
+        'false',
+        'false',
+        'off',
+        'no',
+        '0',
+    ];
+
     private array $options;
     private float $connectTimeout;
     private bool $unbuffered;
@@ -46,6 +77,8 @@ class ConnectionConfig extends BaseConnectionConfig
         float $connectTimeout = 2,
         bool $unbuffered = false
     ) {
+        $this->validateOptions($options);
+
         parent::__construct($host, $port, $user, $password, $database);
 
         $this->options = $options;
@@ -117,5 +150,30 @@ class ConnectionConfig extends BaseConnectionConfig
         $escaped = addcslashes($value, "'\\");
 
         return "'{$escaped}'";
+    }
+
+    private function validateOptions(array $options): void
+    {
+        if (array_key_exists('sslmode', $options)
+            && !in_array($options['sslmode'], self::SSL_MODES, true)) {
+            throw new InvalidArgumentException(
+                'Invalid SSL mode, must be one of: ' . implode(', ', self::SSL_MODES)
+            );
+        }
+
+        if (array_key_exists('gssencmode', $options)
+            && !in_array($options['gssencmode'], self::GSS_MODES, true)) {
+            throw new InvalidArgumentException(
+                'Invalid GSS enc mode, must be one of: ' . implode(', ', self::GSS_MODES)
+            );
+        }
+
+        if (array_key_exists('replication', $options)
+            && !in_array($options['replication'], self::REPLICATION_MODES, true)) {
+            throw new InvalidArgumentException(
+                'Invalid replication mode, must be one of: '
+                . implode(', ', self::REPLICATION_MODES)
+            );
+        }
     }
 }
