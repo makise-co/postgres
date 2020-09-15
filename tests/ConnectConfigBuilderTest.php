@@ -75,6 +75,7 @@ class ConnectConfigBuilderTest extends TestCase
             ->withPort(10228)
             ->withPassword('El-Psy-Congroo')
             ->withDatabase('cern')
+            ->withReplication('database')
             ->withSearchPath(['public'])
             ->withTimezone('UTC')
             ->withEncoding('utf8')
@@ -90,8 +91,8 @@ class ConnectConfigBuilderTest extends TestCase
         $dsn = $config->__toString();
 
         self::assertSame(
-            "host=postgres port=10228 user='makise' password='El-Psy-Congroo' dbname='cern' sslmode='allow'" .
-            " application_name='Makise src Client' client_encoding='utf8' options='-csearch_path=public -ctimezone=UTC'",
+            "host=postgres port=10228 user='makise' password='El-Psy-Congroo' dbname='cern' replication='database'" .
+            " client_encoding='utf8' application_name='Makise src Client' sslmode='allow' options='-csearch_path=public -ctimezone=UTC'",
             $dsn
         );
     }
@@ -105,15 +106,14 @@ class ConnectConfigBuilderTest extends TestCase
                 'port' => 10228,
                 'password' => 'El-Psy-Congroo',
                 'database' => 'cern',
+                'replication' => 'database',
                 'search_path' => ['public'],
                 'timezone' => 'UTC',
                 'encoding' => 'utf8',
                 'application_name' => 'Makise src Client',
+                'sslmode' => 'allow',
                 'connect_timeout' => 1.0,
                 'unbuffered' => false,
-                'options' => [
-                    'sslmode' => 'allow',
-                ]
             ]
         )->build();
 
@@ -123,8 +123,8 @@ class ConnectConfigBuilderTest extends TestCase
         $dsn = $config->__toString();
 
         self::assertSame(
-            "host=postgres port=10228 user='makise' password='El-Psy-Congroo' dbname='cern' sslmode='allow'" .
-            " application_name='Makise src Client' client_encoding='utf8' options='-csearch_path=public -ctimezone=UTC'",
+            "host=postgres port=10228 user='makise' password='El-Psy-Congroo' dbname='cern' replication='database'" .
+            " sslmode='allow' client_encoding='utf8' application_name='Makise src Client' options='-csearch_path=public -ctimezone=UTC'",
             $dsn
         );
     }

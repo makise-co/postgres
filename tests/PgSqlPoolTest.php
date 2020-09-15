@@ -11,8 +11,8 @@ declare(strict_types=1);
 namespace MakiseCo\Postgres\Tests;
 
 use MakiseCo\Postgres\Contracts\Link;
-use MakiseCo\Postgres\Driver\Pq\PqConnection;
-use MakiseCo\Postgres\Driver\Pq\PqConnector;
+use MakiseCo\Postgres\Driver\PgSql\PgSqlConnection;
+use MakiseCo\Postgres\Driver\PgSql\PgSqlConnector;
 use MakiseCo\Postgres\PostgresPool;
 
 /**
@@ -22,21 +22,22 @@ class PgSqlPoolTest extends AbstractLinkTest
 {
     private const POOL_SIZE = 3;
 
-    /** @var \pq\Connection[] */
-    protected $handles = [];
+    /** @var resource[] */
+    protected array $handles = [];
 
     public function createLink(string $connectionString): Link
     {
         for ($i = 0; $i < self::POOL_SIZE; ++$i) {
-            $this->handles[] = $handle = new \pq\Connection($connectionString);
-            $handle->nonblocking = true;
-            $handle->unbuffered = true;
+            $this->handles[] = $handle = \pg_connect(
+                $connectionString,
+                \PGSQL_CONNECT_FORCE_NEW
+            );
         }
 
-        $connector = $this->createMock(PqConnector::class);
+        $connector = $this->createMock(PgSqlConnector::class);
         $connector->method('connect')
             ->willReturnCallback(
-                function (): PqConnection {
+                function (): PgSqlConnection {
                     static $count = 0;
 
                     if (!isset($this->handles[$count])) {
@@ -46,7 +47,7 @@ class PgSqlPoolTest extends AbstractLinkTest
                     $handle = $this->handles[$count];
                     ++$count;
 
-                    return new PqConnection($handle);
+                    return new PgSqlConnection($handle, \pg_socket($handle));
                 }
             );
 
@@ -59,16 +60,16 @@ class PgSqlPoolTest extends AbstractLinkTest
 
         $handle = \reset($this->handles);
 
-        $handle->exec("DROP TABLE IF EXISTS test");
+        \pg_query($handle, "DROP TABLE IF EXISTS test");
 
-        $result = $handle->exec("CREATE TABLE test (domain VARCHAR(63), tld VARCHAR(63), PRIMARY KEY (domain, tld))");
+        $result = \pg_query("CREATE TABLE test (domain VARCHAR(63), tld VARCHAR(63), PRIMARY KEY (domain, tld))");
 
         if (!$result) {
             self::fail('Could not create test table.');
         }
 
         foreach ($this->getData() as $row) {
-            $result = $handle->execParams("INSERT INTO test VALUES (\$1, \$2)", $row);
+            $result = \pg_query_params($handle, "INSERT INTO test VALUES (\$1, \$2)", $row);
 
             if (!$result) {
                 self::fail('Could not insert test data.');
@@ -80,8 +81,12 @@ class PgSqlPoolTest extends AbstractLinkTest
 
     protected function tearDown(): void
     {
-        $this->handles[0]->exec('ROLLBACK');
-        $this->handles[0]->exec("DROP TABLE test");
+        if (\is_resource($this->handles[0])) {
+            \pg_query($this->handles[0], 'ROLLBACK');
+            \pg_query($this->handles[0], 'DROP TABLE test');
+        }
+
+        $this->handles = [];
 
         $this->connection->close();
     }

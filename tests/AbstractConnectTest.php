@@ -10,7 +10,6 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Tests;
 
-use MakiseCo\Postgres\ConnectionConfigBuilder;
 use MakiseCo\Postgres\Connection;
 use MakiseCo\Postgres\ConnectionConfig;
 
@@ -25,17 +24,9 @@ abstract class AbstractConnectTest extends CoroTestCase
 
     public function testConnect(): void
     {
-        $connection = $this->connect(
-            (new ConnectionConfigBuilder())
-                ->fromArray([
-                    'host' => 'host.docker.internal',
-                    'user' => 'makise',
-                    'password' => 'el-psy-congroo',
-                    'dbname' => 'makise',
-                    'connect_timeout' => 1,
-                ])
-                ->build()
-        );
+        $config = ConnectionConfigProvider::getConfig();
+
+        $connection = $this->connect($config);
 
         try {
             self::assertInstanceOf(Connection::class, $connection);

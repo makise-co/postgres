@@ -28,11 +28,13 @@ class ConnectionConfigProvider
             'makise',
             'el-psy-congroo',
             'makise',
+            ['application_name' => 'Postgres Test'],
+            2
         );
     }
 
     public static function getString(): string
     {
-        return 'host=127.0.0.1 port=5434 user=makise password=el-psy-congroo dbname=makise';
+        return "host=127.0.0.1 port=5434 user=makise password=el-psy-congroo dbname=makise application_name='Postgres Test'";
     }
 }

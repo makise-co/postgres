@@ -23,7 +23,7 @@ class PqPoolTest extends AbstractLinkTest
     private const POOL_SIZE = 3;
 
     /** @var \pq\Connection[] */
-    protected $handles = [];
+    protected array $handles = [];
 
     public function createLink(string $connectionString): Link
     {
@@ -82,6 +82,8 @@ class PqPoolTest extends AbstractLinkTest
     {
         $this->handles[0]->exec('ROLLBACK');
         $this->handles[0]->exec("DROP TABLE test");
+
+        $this->handles = [];
 
         $this->connection->close();
     }

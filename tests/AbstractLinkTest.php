@@ -46,13 +46,18 @@ abstract class AbstractLinkTest extends CoroTestCase
      */
     abstract public function createLink(string $connectionString): Link;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
 
         $this->connection = $this->createLink(
             ConnectionConfigProvider::getString()
         );
+    }
+
+    protected function tearDown(): void
+    {
+        $this->connection->close();
     }
 
     public function testQueryWithTupleResult(): void

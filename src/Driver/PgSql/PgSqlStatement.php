@@ -74,6 +74,8 @@ final class PgSqlStatement implements Statement
      */
     public function execute(array $params = [])
     {
+        $this->lastUsedAt = \time();
+
         return $this->handle->statementExecute($this->name, Internal\replaceNamedParams($params, $this->params));
     }
 }

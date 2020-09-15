@@ -234,7 +234,7 @@ class PgSqlResultSet implements ResultSet
      */
     public function isUnbuffered(): bool
     {
-        return true;
+        return false;
     }
 
     /**
