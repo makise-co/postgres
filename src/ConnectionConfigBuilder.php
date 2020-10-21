@@ -333,26 +333,13 @@ class ConnectionConfigBuilder
      */
     public function build(): ConnectionConfig
     {
-        $options = $this->options;
-        $commands = [];
-
-        foreach ($options['options'] ?? [] as $optionKey => $optionValue) {
-            $commands[] = "{$optionKey}={$optionValue}";
-        }
-
-        unset($options['options']);
-
-        if ([] !== $commands) {
-            $options['options'] = '-c' . implode(' -c', $commands);
-        }
-
         return new ConnectionConfig(
             $this->host,
             $this->port,
             $this->user,
             $this->password,
             $this->database,
-            $options,
+            $this->options,
             $this->connectTimeout,
             $this->unbuffered
         );

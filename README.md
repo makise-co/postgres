@@ -114,7 +114,10 @@ run(static function () {
             'sslmode' => 'prefer',
             'client_encoding' => 'utf-8',
             'application_name' => 'Makise Postgres Driver',
-            'options' => '-csearch_path=public -ctimezone=UTC',
+            'options' => [
+                'search_path' => 'public',
+                'timezone' => 'UTC',
+            ],
         ],
         1.0,
     );
