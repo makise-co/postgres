@@ -119,7 +119,23 @@ class ConnectionConfig extends BaseConnectionConfig
         }
 
         foreach ($this->options as $option => $value) {
+            if ($option === 'options') {
+                continue;
+            }
+
             $parts[] = "{$option}={$this->escapeValue($value)}";
+        }
+
+        $commands = [];
+
+        foreach ((array)($this->options['options'] ?? []) as $optionKey => $optionValue) {
+            $commands[] = "{$optionKey}={$optionValue}";
+        }
+
+        if ([] !== $commands) {
+            $value = '-c' . implode(' -c', $commands);
+
+            $parts[] = "options={$this->escapeValue($value)}";
         }
 
         return $this->dsn = implode(' ', $parts);
