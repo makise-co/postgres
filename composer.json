@@ -27,7 +27,6 @@
     "require": {
         "php": ">=7.4",
         "ext-swoole": ">=4.4",
-        "ext-pgsql": "*",
         "makise-co/sql-common": "^1.0"
     },
     "require-dev": {
