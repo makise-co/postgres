@@ -122,17 +122,28 @@ class SwooleHandle implements Handle
 
         $name = Handle::STATEMENT_NAME_PREFIX . sha1($modifiedSql);
 
-        if (isset($this->statements[$name])) {
+        // prevent returning of promised statement which is in de-allocation state
+        if (isset($this->statements[$name]) && !$this->statements[$name]->isDeallocating) {
             $storage = $this->statements[$name];
 
             ++$storage->refCount;
 
-            if ($storage->promise) {
+            // if statement is in allocation state we should wait until allocation done
+            if ($storage->isAllocating) {
                 // Do not return promised prepared statement object, as the $names array may differ.
-                $storage->subscribe();
+                $storage->lock->wait();
+
+                if ($storage->error !== null) {
+                    throw $storage->error;
+                }
             }
 
             return new SwooleStatement($this, $name, $sql, $names);
+        }
+
+        // wait for statement complete de-allocation, before allocating new one
+        if (isset($this->statements[$name]) && $this->statements[$name]->isDeallocating) {
+            $this->statements[$name]->lock->wait();
         }
 
         $storage = new StatementStorage();
@@ -140,7 +151,9 @@ class SwooleHandle implements Handle
 
         $this->statements[$name] = $storage;
 
-        $storage->promise = true;
+        $storage->lock->lock();
+        $storage->isAllocating = true;
+
         $this->send(Closure::fromCallable([$this->handle, 'prepare']), $name, $modifiedSql);
 
         switch ($this->handle->resultStatus) {
@@ -152,21 +165,33 @@ class SwooleHandle implements Handle
             case self::PGRES_FATAL_ERROR:
                 unset($this->statements[$name]);
 
-                throw $this->handleResultError($sql);
+                $storage->error = $this->handleResultError($sql);
+                $storage->isAllocating = false;
+                $storage->lock->unlock();
+
+                throw $storage->error;
 
             case self::PGRES_BAD_RESPONSE:
                 unset($this->statements[$name]);
 
-                throw new Exception\FailureException($this->handle->error);
+                $storage->error = new Exception\FailureException($this->handle->error);
+                $storage->isAllocating = false;
+                $storage->lock->unlock();
+
+                throw $storage->error;
 
             default:
                 unset($this->statements[$name]);
-                throw new Exception\FailureException("Unknown result status");
+
+                $storage->error = new Exception\FailureException("Unknown result status");
+                $storage->isAllocating = false;
+                $storage->lock->unlock();
+
+                throw $storage->error;
         }
 
-        $storage->promise = false;
-
-        $storage->wakeupSubscribers(null);
+        $storage->isAllocating = false;
+        $storage->lock->unlock();
 
         return new SwooleStatement($this, $name, $sql, $names);
     }
@@ -276,9 +301,17 @@ class SwooleHandle implements Handle
             return;
         }
 
-        unset($this->statements[$name]);
+        $storage->lock->lock();
+        $storage->isDeallocating = true;
 
-        $this->query("DEALLOCATE {$name}");
+        try {
+            $this->query("DEALLOCATE {$name}");
+        } finally {
+            unset($this->statements[$name]);
+
+            $storage->isDeallocating = false;
+            $storage->lock->unlock();
+        }
     }
 
     private function send(Closure $closure, ...$params)

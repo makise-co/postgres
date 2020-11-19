@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Driver\Pq;
 
+use MakiseCo\EvPrimitives\Lock;
 use pq;
-use Swoole\Coroutine;
 use Throwable;
 
 /**
@@ -22,45 +22,27 @@ final class StatementStorage
     public int $refCount = 1;
 
     /**
-     * Is awaiting database results for prepare?
+     * Synchronization object to allocate/deallocate statement
+     *
+     * @var Lock
      */
-    public bool $promise = true;
+    public Lock $lock;
+
+    /** @var bool Indicates that the statement is beign allocated */
+    public bool $isAllocating = true;
+
+    /** @var bool Indicates that the statement is beign deallocated */
+    public bool $isDeallocating = false;
 
     public pq\Statement $statement;
 
     public string $sql;
 
-    /**
-     * Coroutine list which wants to get the same statement while it is not prepared yet
-     *
-     * @var int[]
-     */
-    private array $queue = [];
+    /** @var Throwable|null Allocation/De-allocation error */
+    public ?Throwable $error = null;
 
-    /**
-     * Error that will be received by all blocked coroutines
-     */
-    private ?Throwable $error = null;
-
-    public function subscribe(): void
+    public function __construct()
     {
-        $this->queue[Coroutine::getCid()] = true;
-
-        Coroutine::yield();
-
-        if (null !== $this->error) {
-            throw $this->error;
-        }
-    }
-
-    public function wakeupSubscribers(?Throwable $error): void
-    {
-        $this->error = $error;
-
-        foreach ($this->queue as $cid => $item) {
-            unset($this->queue[$cid]);
-
-            Coroutine::resume($cid);
-        }
+        $this->lock = new Lock();
     }
 }
