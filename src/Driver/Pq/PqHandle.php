@@ -192,10 +192,10 @@ class PqHandle implements Handle
 
         $this->statements[$name] = $storage;
 
-        try {
-            $storage->lock->lock();
-            $storage->isAllocating = true;
+        $storage->lock->lock();
+        $storage->isAllocating = true;
 
+        try {
             $storage->statement = $this->send(
                 $sql,
                 [$this->handle, "prepareAsync"],

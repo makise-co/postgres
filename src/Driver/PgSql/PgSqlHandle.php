@@ -162,17 +162,28 @@ class PgSqlHandle implements Handle
 
         $name = Handle::STATEMENT_NAME_PREFIX . sha1($modifiedSql);
 
-        if (isset($this->statements[$name])) {
+        // prevent returning of promised statement which is in de-allocation state
+        if (isset($this->statements[$name]) && !$this->statements[$name]->isDeallocating) {
             $storage = $this->statements[$name];
 
             ++$storage->refCount;
 
-            if ($storage->promise) {
+            // if statement is in allocation state we should wait until allocation done
+            if ($storage->isAllocating) {
                 // Do not return promised prepared statement object, as the $names array may differ.
-                $storage->subscribe();
+                $storage->lock->wait();
+
+                if ($storage->error !== null) {
+                    throw $storage->error;
+                }
             }
 
             return new PgSqlStatement($this, $name, $sql, $names);
+        }
+
+        // wait for statement complete de-allocation, before allocating new one
+        if (isset($this->statements[$name]) && $this->statements[$name]->isDeallocating) {
+            $this->statements[$name]->lock->wait();
         }
 
         $storage = new StatementStorage();
@@ -180,7 +191,9 @@ class PgSqlHandle implements Handle
 
         $this->statements[$name] = $storage;
 
-        $storage->promise = true;
+        $storage->lock->lock();
+        $storage->isAllocating = true;
+
         $result = $this->send("pg_send_prepare", $name, $modifiedSql);
 
         switch (\pg_result_status($result, \PGSQL_STATUS_LONG)) {
@@ -192,21 +205,33 @@ class PgSqlHandle implements Handle
             case \PGSQL_FATAL_ERROR:
                 unset($this->statements[$name]);
 
-                throw $this->handleResultError($result, $sql);
+                $storage->error = $this->handleResultError($result, $sql);
+                $storage->isAllocating = false;
+                $storage->lock->unlock();
+
+                throw $storage->error;
 
             case \PGSQL_BAD_RESPONSE:
                 unset($this->statements[$name]);
 
-                throw new FailureException(\pg_result_error($result));
+                $storage->error = new FailureException(\pg_result_error($result));
+                $storage->isAllocating = false;
+                $storage->lock->unlock();
+
+                throw $storage->error;
 
             default:
                 unset($this->statements[$name]);
-                throw new FailureException("Unknown result status");
+
+                $storage->error = new FailureException("Unknown result status");;
+                $storage->isAllocating = false;
+                $storage->lock->unlock();
+
+                throw $storage->error;
         }
 
-        $storage->promise = false;
-
-        $storage->wakeupSubscribers(null);
+        $storage->isAllocating = false;
+        $storage->lock->unlock();
 
         return new PgSqlStatement($this, $name, $sql, $names);
     }
@@ -254,9 +279,17 @@ class PgSqlHandle implements Handle
             return;
         }
 
-        unset($this->statements[$name]);
+        $storage->lock->lock();
+        $storage->isDeallocating = true;
 
-        $this->query("DEALLOCATE {$name}");
+        try {
+            $this->query("DEALLOCATE {$name}");
+        } finally {
+            unset($this->statements[$name]);
+
+            $storage->isDeallocating = false;
+            $storage->lock->unlock();
+        }
     }
 
     /**
