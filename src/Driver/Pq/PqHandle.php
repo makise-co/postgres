@@ -193,6 +193,44 @@ class PqHandle implements Handle
                 $name,
                 $modifiedSql
             );
+        } catch (Exception\QueryExecutionError $e) {
+            $sqlState = $e->getDiagnostics()['sqlstate'] ?? '';
+            if ($sqlState !== '42P05') {
+                throw $e;
+            }
+
+            /*
+             * https://github.com/php/php-src/blob/master/ext/pdo_pgsql/pgsql_statement.c#L192
+             * 42P05 means that the prepared statement already existed. this can happen if you use
+             * a connection pooling software line pgpool which doesn't close the db-connection once
+             * php disconnects. if php dies (no chance to run RSHUTDOWN) during execution it has no
+             * chance to DEALLOCATE the prepared statements it has created. so, if we hit a 42P05 we
+             * deallocate it and retry ONCE (thies 2005.12.15)
+             */
+
+            // try to allocate statement again
+            try {
+                $this->send(
+                    "DEALLOCATE {$name}",
+                    [$this->handle, "execAsync"],
+                    "DEALLOCATE {$name}"
+                );
+
+                $storage->statement = $this->send(
+                    $sql,
+                    [$this->handle, "prepareAsync"],
+                    $name,
+                    $modifiedSql
+                );
+            } catch (Throwable $e) {
+                unset($this->statements[$name]);
+
+                $storage->error = $e;
+                $storage->isAllocating = false;
+                $storage->lock->unlock();
+
+                throw $e;
+            }
         } catch (Throwable $exception) {
             unset($this->statements[$name]);
 
