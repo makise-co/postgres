@@ -208,14 +208,14 @@ class PqHandle implements Handle
              * deallocate it and retry ONCE (thies 2005.12.15)
              */
 
-            $this->send(
-                "DEALLOCATE {$name}",
-                [$this->handle, "execAsync"],
-                "DEALLOCATE {$name}"
-            );
-
             // try to allocate statement again
             try {
+                $this->send(
+                    "DEALLOCATE {$name}",
+                    [$this->handle, "execAsync"],
+                    "DEALLOCATE {$name}"
+                );
+
                 $storage->statement = $this->send(
                     $sql,
                     [$this->handle, "prepareAsync"],
