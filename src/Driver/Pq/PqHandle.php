@@ -50,7 +50,7 @@ class PqHandle implements Handle
     private bool $isConcurrent = true;
 
     /**
-     * @var StatementStorage[]
+     * @var PqStatementStorage[]
      */
     private array $statements = [];
 
@@ -170,15 +170,11 @@ class PqHandle implements Handle
             ++$storage->refCount;
 
             // Statement may be being allocated or deallocated. Wait to finish, then check for existence again.
-            if ($storage->lock->isLocked()) {
+            if ($storage->promise instanceof Promise) {
                 // Do not return promised prepared statement object, as the $names array may differ.
-                $storage->lock->wait();
+                $storage->promise->wait();
 
                 --$storage->refCount;
-
-                if ($storage->error !== null) {
-                    throw $storage->error;
-                }
 
                 continue;
             }
@@ -186,30 +182,29 @@ class PqHandle implements Handle
             return new PqStatement($this, $name, $sql, $names);
         }
 
-        $storage = new StatementStorage();
+        $storage = new PqStatementStorage();
         $storage->sql = $sql;
 
         $this->statements[$name] = $storage;
 
-        $storage->lock->lock();
-
         try {
-            $storage->statement = $this->send(
-                $sql,
-                [$this->handle, "prepareAsync"],
-                $name,
-                $modifiedSql
-            );
+            $promise = new Promise(function () use ($sql, $name, $modifiedSql) {
+                return $this->send(
+                    $sql,
+                    [$this->handle, "prepareAsync"],
+                    $name,
+                    $modifiedSql
+                );
+            });
+
+            $storage->promise = $promise;
+            $storage->statement = $promise->getResult();
         } catch (Throwable $exception) {
             unset($this->statements[$name]);
 
-            $storage->error = $exception;
-
             throw $exception;
         } finally {
-            $storage->isAllocating = false;
-            $storage->isDeallocating = false;
-            $storage->lock->unlock();
+            $storage->promise = null;
         }
 
         return new PqStatement($this, $name, $sql, $names);
@@ -411,17 +406,15 @@ class PqHandle implements Handle
             return;
         }
 
-        $storage->lock->lock();
-        $storage->isDeallocating = true;
-
-        try {
-            $this->send(null, [$storage->statement, "deallocateAsync"]);
-        } finally {
-            unset($this->statements[$name]);
-
-            $storage->isDeallocating = false;
-            $storage->lock->unlock();
-        }
+        $storage->promise = new Promise(function () use ($storage, $name) {
+            try {
+                $this->send(null, [$storage->statement, "deallocateAsync"]);
+            } finally {
+                unset($this->statements[$name]);
+            }
+        });
+        // await resolution
+//        $storage->promise->getResult();
     }
 
     private function free(): void
