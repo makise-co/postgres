@@ -163,28 +163,37 @@ class PqHandle implements Handle
 
         $name = Handle::STATEMENT_NAME_PREFIX . sha1($modifiedSql);
 
-        while (isset($this->statements[$name])) {
+        // prevent returning of promised statement which is in de-allocation state
+        if (isset($this->statements[$name]) && !$this->statements[$name]->isDeallocating) {
             $storage = $this->statements[$name];
 
             ++$storage->refCount;
 
-            // Statement may be being allocated or deallocated. Wait to finish, then check for existence again.
-            if ($storage->lock->isLocked()) {
+            // if statement is in allocation state we should wait until allocation done
+            if ($storage->isAllocating) {
                 // Do not return promised prepared statement object, as the $names array may differ.
                 $storage->lock->wait();
-                --$storage->refCount;
-                continue;
+
+                if ($storage->error !== null) {
+                    throw $storage->error;
+                }
             }
 
             return new PqStatement($this, $name, $sql, $names);
         }
 
+        // wait for statement complete de-allocation, before allocating new one
+        if (isset($this->statements[$name]) && $this->statements[$name]->isDeallocating) {
+            $this->statements[$name]->lock->wait();
+        }
+
         $storage = new StatementStorage();
         $storage->sql = $sql;
-        $storage->lock->lock();
-        $storage->isAllocating = true;
 
         $this->statements[$name] = $storage;
+
+        $storage->lock->lock();
+        $storage->isAllocating = true;
 
         try {
             $storage->statement = $this->send(
