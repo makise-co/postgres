@@ -223,8 +223,14 @@ class PqHandle implements Handle
             throw new FailureException("Unknown query result");
         }
 
+        if ($this->handle->busy) {
+            var_dump("WARNING: connection is busy after sql: {$sql}");
+            var_dump($this->handle);
+        }
+
         switch ($result->status) {
             case pq\Result::EMPTY_QUERY:
+
                 throw new QueryError("Empty query string");
 
             case pq\Result::COMMAND_OK:
