@@ -48,6 +48,8 @@ class PqHandle implements Handle
 
     private int $lastUsedAt;
 
+    private string $prevSql = '';
+
     /**
      * Connection constructor.
      *
@@ -204,6 +206,13 @@ class PqHandle implements Handle
         try {
             $this->deferred = $this->busy = new Deferred;
 
+            if ($this->handle->busy) {
+                var_dump("WARNING: connection is busy after sql: {$this->prevSql}", $this->handle);
+            }
+            while ($this->handle->busy && $res = $this->handle->getResult()) {
+                var_dump('connection busy', $res);
+            }
+
             $handle = $method(...$args);
 
 //            Loop::reference($this->poll);
@@ -211,6 +220,8 @@ class PqHandle implements Handle
 //                Loop::enable($this->await);
                 Event::set($this->handle->socket, null, null, SWOOLE_EVENT_READ | SWOOLE_EVENT_WRITE);
             }
+
+            $this->prevSql = $sql;
 
             $result = $this->deferred->getResult();
         } catch (pq\Exception $exception) {
@@ -221,12 +232,6 @@ class PqHandle implements Handle
 
         if (!$result instanceof pq\Result) {
             throw new FailureException("Unknown query result");
-        }
-
-        if ($this->handle->busy) {
-            var_dump("WARNING: connection is busy after sql: {$sql}");
-            var_dump($this->handle);
-            var_dump($result);
         }
 
         switch ($result->status) {
