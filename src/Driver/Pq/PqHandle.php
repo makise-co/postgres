@@ -221,7 +221,7 @@ class PqHandle implements Handle
                 Event::set($this->handle->socket, null, null, SWOOLE_EVENT_READ | SWOOLE_EVENT_WRITE);
             }
 
-            $this->prevSql = $sql;
+            $this->prevSql = $sql ?? '';
 
             $result = $this->deferred->getResult();
         } catch (pq\Exception $exception) {
