@@ -226,6 +226,7 @@ class PqHandle implements Handle
         if ($this->handle->busy) {
             var_dump("WARNING: connection is busy after sql: {$sql}");
             var_dump($this->handle);
+            var_dump($result);
         }
 
         switch ($result->status) {
