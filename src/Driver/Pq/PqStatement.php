@@ -12,10 +12,14 @@ namespace MakiseCo\Postgres\Driver\Pq;
 
 use MakiseCo\Postgres\Internal;
 use MakiseCo\SqlCommon\Contracts\Statement;
+use MakiseCo\SqlCommon\Exception\ConnectionException;
 
 final class PqStatement implements Statement
 {
-    private PqHandle $handle;
+    /**
+     * @var \WeakReference<PqHandle>
+     */
+    private \WeakReference $handle;
 
     private string $name;
 
@@ -26,12 +30,12 @@ final class PqStatement implements Statement
     private $lastUsedAt;
 
     /**
-     * @param PqHandle $handle
+     * @param \WeakReference<PqHandle> $handle
      * @param string $name Statement name.
      * @param string $sql Original prepared SQL query.
      * @param string[] $params Parameter indices to parameter names.
      */
-    public function __construct(PqHandle $handle, string $name, string $sql, array $params)
+    public function __construct(\WeakReference $handle, string $name, string $sql, array $params)
     {
         $this->handle = $handle;
         $this->name = $name;
@@ -42,13 +46,25 @@ final class PqStatement implements Statement
 
     public function __destruct()
     {
-        $this->handle->statementDeallocate($this->name);
+        /** @var PqHandle|null $handle */
+        $handle = $this->handle->get();
+        if ($handle === null) {
+            return; // Connection dead.
+        }
+
+        $handle->statementDeallocate($this->name);
     }
 
     /** {@inheritdoc} */
     public function isAlive(): bool
     {
-        return $this->handle->isAlive();
+        /** @var PqHandle|null $handle */
+        $handle = $this->handle->get();
+        if ($handle === null) {
+            return false; // Connection dead.
+        }
+
+        return $handle->isAlive();
     }
 
     /** {@inheritdoc} */
@@ -66,9 +82,15 @@ final class PqStatement implements Statement
     /** {@inheritdoc} */
     public function execute(array $params = [])
     {
+        /** @var PqHandle|null $handle */
+        $handle = $this->handle->get();
+        if ($handle === null) {
+            throw new ConnectionException("The connection to the database has been closed");
+        }
+
         $this->lastUsedAt = \time();
 
-        return $this->handle->statementExecute(
+        return $handle->statementExecute(
             $this->name,
             Internal\replaceNamedParams($params, $this->params),
         );

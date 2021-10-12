@@ -37,9 +37,6 @@ class PqHandle implements Handle
     /** @var Deferred|null */
     private $busy;
 
-    private \Closure $poll;
-    private \Closure $await;
-
     /** @var Coroutine\Channel[] */
     private $listeners = [];
 
@@ -48,6 +45,7 @@ class PqHandle implements Handle
 
     private int $lastUsedAt;
 
+    private int $fd = -1;
     private string $prevSql = '';
 
     /**
@@ -60,79 +58,17 @@ class PqHandle implements Handle
         $this->handle = $handle;
         $this->lastUsedAt = \time();
 
-        $handle = &$this->handle;
-        $lastUsedAt = &$this->lastUsedAt;
-        $deferred = &$this->deferred;
-        $listeners = &$this->listeners;
-
-        $this->poll = static function () use (&$deferred, &$lastUsedAt, &$listeners, &$handle): void {
-            $lastUsedAt = \time();
-
-            if ($handle->poll() === pq\Connection::POLLING_FAILED) {
-                $exception = new ConnectionException($handle->errorMessage);
-                Event::del($handle->socket);
-                $handle = null; // Marks connection as dead.
-
-                foreach ($listeners as $listener) {
-                    $listener->push($exception);
-                }
-
-                if ($deferred !== null) {
-                    $deferred->fail($exception);
-                }
-
-                return;
-            }
-
-            if ($deferred === null) {
-                return; // No active query, only notification listeners.
-            }
-
-            if ($handle->busy) {
-                return; // Not finished receiving data, poll again.
-            }
-
-            $deferred->resolve($handle->getResult());
-
-            if (!$deferred && empty($listeners)) {
-            }
-        };
-
-        $this->await = static function () use (&$deferred, &$listeners, &$handle): void {
-            try {
-                if (!$handle->flush()) {
-                    return; // Not finished sending data, continue polling for writability.
-                }
-            } catch (pq\Exception $exception) {
-                $exception = new ConnectionException("Flushing the connection failed", 0, $exception);
-                $handle = null; // Marks connection as dead.
-
-                foreach ($listeners as $listener) {
-                    $listener->push($exception);
-                }
-
-                if ($deferred !== null) {
-                    $deferred->fail($exception);
-                }
-            }
-
-            // disable write event
-            if ($handle) {
-                Event::set($handle->socket, null, null, SWOOLE_EVENT_READ);
-            }
-        };
-
-        if (!Event::add(
+        if (!$this->fd = Event::add(
             $this->handle->socket,
-            $this->poll,
-            $this->await,
+            \Closure::fromCallable([$this, 'poll']),
+            \Closure::fromCallable([$this, 'await']),
             SWOOLE_EVENT_READ | SWOOLE_EVENT_WRITE
         )) {
             throw new FailureException('Unable to add postgres event');
         }
 
         // disable await callback
-        Event::set($this->handle->socket, null, null, SWOOLE_EVENT_READ);
+        Event::set($this->fd, null, null, SWOOLE_EVENT_READ);
     }
 
     /**
@@ -171,8 +107,11 @@ class PqHandle implements Handle
         }
 
         if ($this->handle !== null) {
-            Event::del($this->handle->socket);
+            Event::del($this->fd);
             $this->handle = null;
+
+            // forget all prepared statements
+            $this->statements = [];
 
             foreach ($this->listeners as $listener) {
                 $listener->push(new ConnectionException("The connection was closed"));
@@ -218,7 +157,7 @@ class PqHandle implements Handle
 //            Loop::reference($this->poll);
             if (!$this->handle->flush()) {
 //                Loop::enable($this->await);
-                Event::set($this->handle->socket, null, null, SWOOLE_EVENT_READ | SWOOLE_EVENT_WRITE);
+                Event::set($this->fd, null, null, SWOOLE_EVENT_READ | SWOOLE_EVENT_WRITE);
             }
 
             $this->prevSql = $sql ?? '';
@@ -283,7 +222,7 @@ class PqHandle implements Handle
 //            Loop::reference($this->poll);
             if (!$this->handle->flush()) {
 //                Loop::enable($this->await);
-                Event::set($this->handle->socket, null, null, SWOOLE_EVENT_READ | SWOOLE_EVENT_WRITE);
+                Event::set($this->fd, null, null, SWOOLE_EVENT_READ | SWOOLE_EVENT_WRITE);
             }
 
             try {
@@ -347,14 +286,13 @@ class PqHandle implements Handle
 
     /**
      * @param string $name
-     *
-     * @return Promise
-     *
      * @throws FailureException
      */
     public function statementDeallocate(string $name): void
     {
         if (!$this->handle) {
+            unset($this->statements[$name]);
+
             return; // Connection dead.
         }
 
@@ -377,6 +315,8 @@ class PqHandle implements Handle
                 }
             }
         );
+        $storage->promise->wait();
+        $storage->promise = null;
     }
 
     /**
@@ -432,7 +372,7 @@ class PqHandle implements Handle
                 continue;
             }
 
-            return new PqStatement($this, $name, $sql, $names);
+            return new PqStatement(\WeakReference::create($this), $name, $sql, $names);
         }
 
         $storage = new PqStatementStorage();
@@ -456,7 +396,7 @@ class PqHandle implements Handle
             $storage->promise = null;
         }
 
-        return new PqStatement($this, $name, $sql, $names);
+        return new PqStatement(\WeakReference::create($this), $name, $sql, $names);
     }
 
     /**
@@ -587,5 +527,72 @@ class PqHandle implements Handle
         }
 
         $this->handle->unbuffered = true;
+    }
+
+    private function poll(): void
+    {
+        $this->lastUsedAt = \time();
+
+        if ($this->handle === null) {
+            return;
+        }
+
+        if ($this->handle->poll() === pq\Connection::POLLING_FAILED) {
+            $exception = new ConnectionException($this->handle->errorMessage);
+
+            Event::del($this->fd);
+            $this->handle = null; // Marks connection as dead.
+
+            foreach ($this->listeners as $listener) {
+                $listener->push($exception);
+            }
+
+            if ($this->deferred !== null) {
+                $this->deferred->fail($exception);
+            }
+
+            return;
+        }
+
+        if ($this->deferred === null) {
+            return; // No active query, only notification listeners.
+        }
+
+        if ($this->handle->busy) {
+            return; // Not finished receiving data, poll again.
+        }
+
+        $this->deferred->resolve($this->handle->getResult());
+    }
+
+    private function await(): void
+    {
+        if ($this->handle === null) {
+            return;
+        }
+
+        try {
+            if (!$this->handle->flush()) {
+                return; // Not finished sending data, continue polling for writability.
+            }
+        } catch (pq\Exception $exception) {
+            $exception = new ConnectionException("Flushing the connection failed", 0, $exception);
+
+            Event::del($this->fd);
+            $this->handle = null; // Marks connection as dead.
+
+            foreach ($this->listeners as $listener) {
+                $listener->push($exception);
+            }
+
+            if ($this->deferred !== null) {
+                $this->deferred->fail($exception);
+            }
+        }
+
+        // disable write event
+        if ($this->handle) {
+            Event::set($this->fd, null, null, SWOOLE_EVENT_READ);
+        }
     }
 }
