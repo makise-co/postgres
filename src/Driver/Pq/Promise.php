@@ -10,13 +10,12 @@ declare(strict_types=1);
 
 namespace MakiseCo\Postgres\Driver\Pq;
 
-use Swoole\Coroutine\Channel;
 use Swoole\Coroutine;
+use Swoole\Coroutine\Channel;
 use Swoole\Event;
 
 class Promise
 {
-    private Channel $chan;
     private \Closure $func;
 
     /**
@@ -32,15 +31,6 @@ class Promise
     {
         $this->chan = new Channel(1);
         $this->func = $func;
-
-        Coroutine::create(function () {
-            try {
-                $result = ($this->func)();
-                $this->chan->push($result);
-            } catch (\Throwable $e) {
-                $this->chan->push($e);
-            }
-        });
     }
 
     /**
@@ -61,8 +51,12 @@ class Promise
 
         $this->awaiting = true;
 
-        $this->result = $this->chan->pop();
-        $this->chan->close();
+        try {
+            $this->result = ($this->func)();
+        } catch (\Throwable $e) {
+            $this->result = $e;
+        }
+
         $this->awaited = true;
 
         $awaiters = $this->awaitors;
